@@ -70,7 +70,7 @@ internal class ImmediateSuggestionController(
     private val torchSuggestionAction = Runnable { showTorchSuggestionIfNeeded() }
 
     /**
-     * 常亮建议：半暗检测与点按层由 [PreSleepKeepAwakeController] 负责，
+     * 常亮建议：半暗检测与「点气泡后加锁保持」由 [PreSleepKeepAwakeController] 负责，
      * 这里只把它的结果接到同一条建议通路上，弹出与其它建议一样的气泡。
      */
     private val keepAwakeController =
@@ -91,7 +91,8 @@ internal class ImmediateSuggestionController(
                             "保持常亮",
                             "屏幕即将变暗，点击保持常亮",
                             engage,
-                            NEVER_TIMEOUT,
+                            // 0 = 跟随「气泡停留」设置：停留多久由用户定，到时自己消失。
+                            USE_BUBBLE_TIMEOUT,
                         ),
                     )
                 }
@@ -581,8 +582,8 @@ internal class ImmediateSuggestionController(
         const val TYPE_CLIPBOARD = "clipboard"
         const val TYPE_KEEP_AWAKE = "keep_awake"
 
-        /** 建议自带停留时间：0 = 跟随全局设置，负数 = 不自动消失。 */
-        const val NEVER_TIMEOUT = -1
+        /** 建议自带停留时间：0 = 跟随「气泡停留」设置，负数 = 不自动消失。 */
+        const val USE_BUBBLE_TIMEOUT = 0
 
         private const val TORCH_DELAY_MS = 5_000L
         private const val NATIVE_CLIPBOARD_GRACE_MS = 1_800L

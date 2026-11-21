@@ -93,6 +93,7 @@ import io.github.hoerire.free.ui.theme.LocalRadialItemColors
 import io.github.hoerire.free.ui.theme.RadialItemColors
 import kotlin.math.PI
 import kotlin.math.roundToInt
+import kotlin.coroutines.resume
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -126,6 +127,14 @@ internal class CornerRadialOverlayView(
          */
         fun onBackdropExitStarted()
 
+        /**
+         * 入场动画真正开始（窗口已经把第一帧画出来）。
+         *
+         * 窗口级效果（背景模糊渐变）必须和它同一时刻起步：窗口还没参与合成时先跑动画，
+         * 用户看到的就是"浮层一下子全展开、但从头到尾没有过渡"。
+         */
+        fun onEntryAnimationStarted(view: CornerRadialOverlayView)
+
         fun onMorePanelRequested()
 
         fun onDismissRequested()
@@ -152,6 +161,21 @@ internal class CornerRadialOverlayView(
     private val backdropAlpha = mutableFloatStateOf(1f)
     private var backdropAnimator: ValueAnimator? = null
     private val entryProgress = Animatable(0f)
+
+    /**
+     * 窗口真正把第一帧画进表面（并交给合成）的时刻；0 表示还没画出来。
+     *
+     * 从应用返回桌面、收起键盘这些转场里，新加的浮层窗口要等转场结束才参与合成。
+     * 入场动画若从组合完成就开始算，这整段会被白白消耗掉——浮层出现时已经展开完了。
+     * 这里记下"真的画出第一帧"的时刻，作为入场动画的起点。
+     */
+    private var firstFrameCommittedAt = 0L
+
+    /** 等第一帧画出来的协程；窗口还没参合成时入场动画先挂在这里。 */
+    private var entryVisibilityWaiter: kotlinx.coroutines.CancellableContinuation<Unit>? = null
+
+    /** 本次呼出的入场动画是否已经开始过；「更多」面板返回时不再重播。 */
+    private var entryAnimationPlayed = false
 
 
     private val handoffEntryProgress = mutableFloatStateOf(0f)
@@ -272,6 +296,7 @@ internal class CornerRadialOverlayView(
         this.retractDurationMs = ModulePreferences.coerceRadialRetractDurationMs(retractDurationMs)
         shownAtUptime = android.os.SystemClock.uptimeMillis()
         entrySettled = false
+        entryAnimationPlayed = false
         this.catalog = catalog
         latestX = x
         latestY = y
@@ -364,6 +389,8 @@ internal class CornerRadialOverlayView(
         disposed = true
         backdropAnimator?.cancel()
         backdropAnimator = null
+        // 入场动画若还挂在"等第一帧"上，随组合销毁一起放掉，别留一个不会再来的挂起点。
+        entryVisibilityWaiter = null
         removeCallbacks(timeout)
         var failure: Throwable? = null
         try {
@@ -455,43 +482,58 @@ internal class CornerRadialOverlayView(
 
         LaunchedEffect(panelModeState.value, backdropOnlyState.value) {
             if (panelModeState.value || backdropOnlyState.value) return@LaunchedEffect
+            // 「更多」面板返回：入场早就演过了（那时窗口已经可见），直接给终态，
+            // 否则会凭空多播一次展开。
+            if (entryAnimationPlayed) {
+                entryProgress.snapTo(1f)
+                entrySettled = true
+                return@LaunchedEffect
+            }
+            entryAnimationPlayed = true
             if (!animationsEnabled) {
                 entryProgress.snapTo(1f)
             } else {
-                // 首帧补偿：动画是在组合完成、第一帧画出来才开始跑的，
-                // 而用户是从按下那一刻开始计时的。把 begin() 到现在已经过去的时间
-                // 从总预算里扣掉，展开完成的时刻就固定在 begin() + 预算上。
+                // 先等窗口真的画出第一帧。从应用返回桌面、收起键盘这类转场里，
+                // 浮层窗口要等转场结束才参与合成；动画在那之前跑完，浮层出现时已经全展开，
+                // 用户看到的就是"没有展开动画"。锚到这里，任何情况下都完整播一遍。
+                awaitFirstCommittedFrame()
                 val total = SystemMotion.scaledMillis(expandDurationMs.toLong(), motionScale)
-                val elapsed =
+                val lateBy =
                     (android.os.SystemClock.uptimeMillis() - shownAtUptime)
                         .toInt()
-                        .coerceIn(0, total)
-                val start = elapsed.toFloat() / total
-                val remaining = (total - elapsed).coerceAtLeast(0)
+                        .coerceAtLeast(0)
+                // 正常情况（首帧在几十毫秒内就画出）仍做原来的首帧补偿：展开完成的时刻
+                // 固定在 begin() + 预算上。晚到则整段重播，绝不按"已经过去多久"截短——
+                // 那正是动画被吃掉的路径。
+                val compensated = if (lateBy <= ENTRY_COMPENSATION_LIMIT_MS) lateBy.coerceAtMost(total) else 0
+                val remaining = (total - compensated).coerceAtLeast(1)
                 io.github.hoerire.free.log.ModuleLog.debug("ANIM") {
-                    "SYSTEM_ANIM_ENTRY_compensated_elapsed_" + elapsed + "_remaining_" + remaining +
+                    "ANIM_ENTRY_START_late_" + lateBy + "_compensated_" + compensated +
                         "_total_" + total
                 }
-                if (start >= 1f || remaining <= 0) {
-                    entryProgress.snapTo(1f)
-                } else {
-                    entryProgress.snapTo(start)
-                    // 误触判定在展开 60% 时就放行：入场曲线为了"软回弹"放慢了，
-                    // 若仍等整段动画跑完（380ms），快速轻扫会被大面积误判成误触。
-                    kotlinx.coroutines.coroutineScope {
-                        launch {
-                            delay((remaining * SETTLE_FRACTION).toLong())
-                            entrySettled = true
-                        }
-                        entryProgress.animateTo(
-                            targetValue = 1f,
-                            animationSpec =
-                                tween(
-                                    durationMillis = remaining,
-                                    easing = LinearEasing,
-                                ),
-                        )
+                listener.onEntryAnimationStarted(this@CornerRadialOverlayView)
+                if (disposed) return@LaunchedEffect
+                entryProgress.snapTo(compensated.toFloat() / total)
+                // 误触判定在展开 60% 时就放行：入场曲线为了"软回弹"放慢了，
+                // 若仍等整段动画跑完（默认 380ms，可在设置里调），快速轻扫会被大面积误判成误触。
+                kotlinx.coroutines.coroutineScope {
+                    launch {
+                        delay((remaining * SETTLE_FRACTION).toLong())
+                        entrySettled = true
                     }
+                    if (io.github.hoerire.free.log.VerboseLog.enabled) launch { sampleEntryProgress() }
+                    entryProgress.animateTo(
+                        targetValue = 1f,
+                        animationSpec =
+                            tween(
+                                durationMillis = remaining,
+                                easing = LinearEasing,
+                            ),
+                    )
+                }
+                io.github.hoerire.free.log.ModuleLog.debug("ANIM") {
+                    "ANIM_ENTRY_DONE_+" +
+                        (android.os.SystemClock.uptimeMillis() - shownAtUptime)
                 }
             }
             // 入场动画结束事件：抬手判定只读这个标志，不做任何时间计算。
@@ -1156,10 +1198,100 @@ internal class CornerRadialOverlayView(
         if (!disposed && !lifecycleRegistry.currentState.isAtLeast(Lifecycle.State.STARTED)) {
             lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
         }
+        io.github.hoerire.free.log.ModuleLog.debug("ANIM") {
+            "ANIM_ATTACH_+" + (android.os.SystemClock.uptimeMillis() - shownAtUptime)
+        }
+        watchFirstCommittedFrame()
         post {
             if (!disposed && isAttachedToWindow) {
                 performHapticFeedback(HapticFeedbackConstants.GESTURE_START)
             }
+        }
+    }
+
+    /**
+     * 盯着"第一帧真的画出来"这件事。
+     *
+     * 窗口在转场里被挂着的时候，ViewRootImpl 不会绘制（表面还没有效），
+     * 所以帧提交回调恰好在浮层真正出现在屏幕上的那一帧到达。
+     */
+    private fun watchFirstCommittedFrame() {
+        try {
+            viewTreeObserver.registerFrameCommitCallback { onFirstFrameCommitted() }
+        } catch (_: Throwable) {
+            // 拿不到回调（老系统/非常规窗口）：等着的一方由超时兜底。
+        }
+    }
+
+    private fun onFirstFrameCommitted() {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (firstFrameCommittedAt == 0L) {
+            firstFrameCommittedAt = now
+            io.github.hoerire.free.log.ModuleLog.debug("ANIM") {
+                "ANIM_FIRST_FRAME_COMMIT_+" + (now - shownAtUptime) +
+                    "_shown_" + isShown + "_hw_" + isHardwareAccelerated +
+                    "_winvis_" + windowVisibility
+            }
+        }
+        val waiter = entryVisibilityWaiter
+        entryVisibilityWaiter = null
+        if (waiter != null && waiter.isActive) waiter.resume(Unit)
+    }
+
+    /**
+     * 挂到第一帧提交为止（最多等 [ENTRY_VISIBILITY_WAIT_CAP_MS]）。
+     *
+     * 用挂起而不是轮询：帧时钟在窗口不可见时可能被暂停，轮询会跟着停摆。
+     */
+    private suspend fun awaitFirstCommittedFrame() {
+        if (firstFrameCommittedAt != 0L) return
+        kotlinx.coroutines.suspendCancellableCoroutine<Unit> { continuation ->
+            entryVisibilityWaiter = continuation
+            val cap = Runnable {
+                if (entryVisibilityWaiter === continuation) entryVisibilityWaiter = null
+                io.github.hoerire.free.log.ModuleLog.debug("ANIM") {
+                    "ANIM_ENTRY_WAIT_TIMEOUT_+" +
+                        (android.os.SystemClock.uptimeMillis() - shownAtUptime)
+                }
+                if (continuation.isActive) continuation.resume(Unit)
+            }
+            postDelayed(cap, ENTRY_VISIBILITY_WAIT_CAP_MS)
+            continuation.invokeOnCancellation {
+                removeCallbacks(cap)
+                if (entryVisibilityWaiter === continuation) entryVisibilityWaiter = null
+            }
+        }
+    }
+
+    /** 诊断：入场动画每帧的进度与实际时刻，用来判断动画是否被转场吃掉。 */
+    private suspend fun sampleEntryProgress() {
+        var ticks = 0
+        while (ticks++ < PROGRESS_PROBE_SAMPLES) {
+            delay(PROGRESS_PROBE_INTERVAL_MS)
+            val progress = entryProgress.value
+            io.github.hoerire.free.log.ModuleLog.debug("ANIM") {
+                "ANIM_ENTRY_PROGRESS_p" + (progress * 100).toInt() +
+                    "_+" + (android.os.SystemClock.uptimeMillis() - shownAtUptime) +
+                    "_shown_" + isShown + "_winvis_" + windowVisibility +
+                    "_retract_" + retracting.value
+            }
+            if (progress >= 1f || retracting.value) return
+        }
+    }
+
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        io.github.hoerire.free.log.ModuleLog.debug("ANIM") {
+            "ANIM_WINDOW_VIS_" + visibility + "_+" +
+                (android.os.SystemClock.uptimeMillis() - shownAtUptime)
+        }
+    }
+
+    override fun onVisibilityAggregated(isVisible: Boolean) {
+        super.onVisibilityAggregated(isVisible)
+        io.github.hoerire.free.log.ModuleLog.debug("ANIM") {
+            "ANIM_AGG_" + isVisible + "_+" +
+                (android.os.SystemClock.uptimeMillis() - shownAtUptime)
         }
     }
 
@@ -1425,8 +1557,8 @@ internal class CornerRadialOverlayView(
     /**
      * 三次平滑：两端都平缓，用作遮罩淡入淡出。
      *
-     * 与展开/收回共用同一条进度（[entryProgress]），所以遮罩的淡入正好铺满 380ms 的展开、
-     * 淡出铺满 500ms 的收回，不额外引入第三套时间轴。
+     * 与展开/收回共用同一条进度（[entryProgress]），所以遮罩的淡入正好铺满展开、
+     * 淡出铺满收回（时长取设置里那两项），不额外引入第三套时间轴。
      */
     private fun smoothStep(value: Float): Float {
         val t = value.coerceIn(0f, 1f)
@@ -1509,6 +1641,21 @@ internal class CornerRadialOverlayView(
          * 0.6 与原 300ms 入场下的可用时刻大致对齐，避免"曲线变慢 → 轻扫失效"。
          */
         const val SETTLE_FRACTION = 0.6f
+
+        /**
+         * 首帧补偿的上限（毫秒）。
+         *
+         * 首帧在这么短的时间里就画出来，说明没有转场挡着，按旧逻辑把这点延迟从预算里扣掉，
+         * 展开结束时刻仍然对齐 begin()；超过这个数就说明浮层被转场挂住了，整段重播。
+         */
+        const val ENTRY_COMPENSATION_LIMIT_MS = 120
+
+        /** 等第一帧的下限：再久也不等了，宁可动起来也不要把浮层冻在零进度。 */
+        const val ENTRY_VISIBILITY_WAIT_CAP_MS = 1200L
+
+        /** 入场进度诊断采样：间隔与次数上限（约 1.4 秒，够覆盖任何展开时长）。 */
+        const val PROGRESS_PROBE_INTERVAL_MS = 48L
+        const val PROGRESS_PROBE_SAMPLES = 30
 
         /**
          * Dock 隆起的影响半径（以图标直径为单位）：指针正下方最高，隔一两格基本不再抬。

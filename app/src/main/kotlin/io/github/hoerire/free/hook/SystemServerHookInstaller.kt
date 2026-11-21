@@ -68,7 +68,7 @@ internal class SystemServerHookInstaller(
             },
             logger = { priority, code, throwable -> ModuleLog.forward(priority, code, throwable) },
         ).install(classLoader)
-        // 常亮建议：屏幕进入半暗阶段时把状态写给 SystemUI（它的点按层在那里）。
+        // 常亮建议：屏幕进入半暗阶段时把状态写给 SystemUI（气泡由它弹）。
         PreSleepDetectionHook(
             module = module,
             configuration = configuration,

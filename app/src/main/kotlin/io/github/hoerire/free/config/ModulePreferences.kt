@@ -235,6 +235,7 @@ internal object ModulePreferences {
     const val KEY_BUBBLE_AUTO_DISMISS = "bubble_auto_dismiss_v1"
     const val KEY_BUBBLE_MOTION_CONTINUOUS = "bubble_motion_continuous_v1"
     /** 状态栏滚动：最新通知在状态栏时钟位置滚动显示。 */
+    /** 状态栏滚动开关：气泡总闸之下的子开关，可以只滚不出气泡。 */
     const val KEY_STATUS_SCROLL_ENABLED = "status_scroll_enabled_v1"
     const val KEY_STATUS_SCROLL_ROUNDS = "status_scroll_rounds_v1"
     /**
@@ -259,10 +260,11 @@ internal object ModulePreferences {
     const val KEY_SUGGESTION_NO_EDGE = "suggestion_no_edge_v1"
 
     /**
-     * system_server → SystemUI：屏幕进入即将休眠的半暗阶段。
+     * system_server → SystemUI：屏幕正处于「连续变暗、即将休眠」的状态。
      *
-     * 写进 `Settings.Global`：1 = 半暗或即将息屏，0 = 已回到常亮。两个进程之间
-     * 不需要额外通道，SystemUI 侧按固定间隔轮询。
+     * 写进 `Settings.Global`：1 = 正在连续变暗，0 = 已回到常亮。只做一件事——
+     * 告诉 SystemUI 该弹「保持常亮」气泡了；SystemUI 侧按固定间隔轮询该标志，
+     * 并要求它连续保持一段时间才真的弹（视频播放时的瞬时抖动不算）。
      */
     const val KEY_PRE_SLEEP_ARMED = "free_pre_sleep_armed"
 

@@ -207,6 +207,13 @@ internal class ColorOsFreeformCoordinator(
     private var blurUnavailableLogged = false
     /** 当前正在生效的模糊半径：淡入淡出都从它接着走，中途反向也不会跳。 */
     private var overlayBlurRadiusPx = 0
+    /**
+     * 本次呼出要拉到的模糊半径。
+     *
+     * 不在这里立刻起步：模糊渐变要等浮层窗口真的画出第一帧（[onEntryAnimationStarted]）
+     * 才开始，否则转场期间窗口还不可见，模糊先淡完了。
+     */
+    private var pendingOverlayBlurPx = 0
     /** 模糊渐变：每帧改一次窗口半径。 */
     private var overlayBlurAnimator: ValueAnimator? = null
     /** 浮层窗口当前的 LayoutParams；模糊渐变直接改它再交给 WindowManager。 */
@@ -985,11 +992,17 @@ internal class ColorOsFreeformCoordinator(
         val keepOpen = lastSettings.radialKeepOpen
         val blurTargetPx = overlayBlurRadiusPx(lastSettings.backdropLevel)
         overlayBlurRadiusPx = 0
+        pendingOverlayBlurPx = blurTargetPx
         overlayBlurAnimator?.cancel()
         overlayBlurAnimator = null
         // 模糊从 0 半径起步，随扇形展开逐帧拉开：窗口创建时就把标记挂上（半径 0 不可见），
         // 否则第一帧会是"整屏突然糊掉"。
         val initialBlurPx = if (blurTargetPx > 0) 0 else NO_OVERLAY_BLUR
+        // 层级按"此刻输入法是否真的可见"决定。键盘刚收起（或本来没起）时不能用输入法层：
+        // 那一层会跟着输入法的退场一起被隐藏/动画，浮层画出来了却看不见，
+        // 表现就是"从应用返回桌面后立刻呼出，扇形一下子全展开、没有展开动画"。
+        overlayWindowType = overlayTypeForCurrentIme()
+        trace("SYSTEM_OVERLAY_LAYER_" + overlayWindowType)
         val params = createOverlayParams(blurRadiusPx = initialBlurPx)
         var view: CornerRadialOverlayView? = null
         try {
@@ -1017,9 +1030,8 @@ internal class ColorOsFreeformCoordinator(
             try {
                 windowManager.addView(view, params)
                 overlayParams = params
-                overlayWindowType = OVERLAY_WINDOW_TYPE
                 trace("SYSTEM_OVERLAY_SHOWN_" + overlayWindowType)
-                trace("SYSTEM_OVERLAY_TYPE_" + OVERLAY_WINDOW_TYPE)
+                trace("SYSTEM_OVERLAY_TYPE_" + overlayWindowType)
             } catch (exception: RuntimeException) {
                 // 输入法层的窗口类型被系统拒绝时，退回普通悬浮窗，至少保证扇形可用。
                 val fallback =
@@ -1031,15 +1043,7 @@ internal class ColorOsFreeformCoordinator(
             }
             // 主窗口只是画；点选必须另有人接。
             attachTouchRegion()
-            if (blurTargetPx > 0) {
-                // 第一帧之后再拉开：此时窗口已经挂上、扇形动画也已经开始，
-                // 模糊与遮罩同步淡入。
-                view.post {
-                    if (overlay === view) {
-                        rampOverlayBlur(blurTargetPx, overlayEntryDurationMillis())
-                    }
-                }
-            }
+            // 模糊由 onEntryAnimationStarted 拉起：和扇形入场动画同一帧起步。
         } catch (exception: RuntimeException) {
             handleOverlayFailure(view, "SYSTEM_OVERLAY_ADD_FAILED", exception)
         } catch (error: LinkageError) {
@@ -1127,6 +1131,21 @@ internal class ColorOsFreeformCoordinator(
     override fun onBackdropExitStarted() {
         // 取消/超时：模糊跟着同一条收起动画（设置里的收回时长）淡出，窗口移除时已归零。
         rampOverlayBlur(0, overlayRetractDurationMillis())
+    }
+
+    /**
+     * 扇形入场动画刚开始（窗口已画出第一帧）：模糊与它同一条时间线拉开。
+     *
+     * 不能提前到 addView 之后：从应用返回桌面时窗口要等转场结束才参与合成，
+     * 提前跑完的模糊等于没有。
+     */
+    override fun onEntryAnimationStarted(view: CornerRadialOverlayView) {
+        if (overlay !== view) return
+        val target = pendingOverlayBlurPx
+        pendingOverlayBlurPx = 0
+        if (target <= 0) return
+        trace("SYSTEM_OVERLAY_BLUR_RAMP_START_" + target)
+        rampOverlayBlur(target, overlayEntryDurationMillis())
     }
 
     private fun launchCommittedEntry(entry: RadialEntry) {
@@ -1713,6 +1732,7 @@ internal class ColorOsFreeformCoordinator(
         overlayBlurAnimator?.cancel()
         overlayBlurAnimator = null
         overlayBlurRadiusPx = 0
+        pendingOverlayBlurPx = 0
         overlayParams = null
         if (sidebar.isPending) sidebar.cancel()
         morePanelActive = false
@@ -1744,6 +1764,20 @@ internal class ColorOsFreeformCoordinator(
             !(lastSettings.pauseInKeyboard && isInputMethodVisible())
 
     /** 输入法窗口此刻是否可见；状态拿不到时按「不可见」处理，避免误拦手势。 */
+    /**
+     * 浮层该挂哪一层。
+     *
+     * 输入法真的在屏上时用输入法对话框层（压在键盘之上，否则键盘会盖住扇形）；
+     * 其余时候一律用普通悬浮层——输入法层会随键盘退场一起被隐藏/动画，
+     * 键盘刚收起的那几百毫秒里浮层即使已经画出来也看不见。
+     */
+    private fun overlayTypeForCurrentIme(): Int =
+        if (runCatching { isInputMethodVisible() }.getOrDefault(false)) {
+            OVERLAY_WINDOW_TYPE
+        } else {
+            FALLBACK_OVERLAY_TYPE
+        }
+
     private fun isInputMethodVisible(): Boolean {
         // 主判据：WMS 里那个 IME 窗口。窗外关闭（OutsideTapClose）用的就是这条链路。
         // 只读 IMMS 的 mImeWindowVis 不够：取到 0 会当作没弹键盘，结果「屏蔽键盘」永远不生效。
@@ -2376,7 +2410,10 @@ internal class ColorOsFreeformCoordinator(
         // 用 APPLICATION_OVERLAY 时键盘一弹出就盖住扇形，故选输入法对话框层（141000），
         // 只压在键盘之上，仍低于状态栏等更高层系统窗口。被系统拒绝时回落到 APPLICATION_OVERLAY。
         /**
-         * 浮层窗口类型：输入法对话框层，压在其他窗口与输入法之上。
+         * 输入法对话框层的窗口类型：压在其它窗口与键盘之上。
+         *
+         * 只在输入法真的可见时使用（见 [overlayTypeForCurrentIme]）：键盘退场期间这一层
+         * 会跟着一起被隐藏，浮层会出现"画出来了但看不见"的空窗期。
          *
          * 呼出时"画面向屏幕内滑一下又滑回去"是窗口自身的进入动画，不是 IME 区域变化，
          * 由 [createOverlayParams] 里的 windowAnimations = 0 关闭，与这个类型无关。

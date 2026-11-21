@@ -31,8 +31,8 @@ internal data class BubbleSettings(
     val previewWidthDp: Int = 280,
     val previewOverlayAlpha: Int = 18,
     val previewPosition: Int = BubbleMetrics.CONTENT_AUTO,
-    val statusScrollEnabled: Boolean = ModulePreferences.DEFAULT_STATUS_SCROLL_ENABLED,
     /** 模块总开关 ×「状态栏滚动」；与气泡白名单无关。 */
+    val statusScrollEnabled: Boolean = ModulePreferences.DEFAULT_STATUS_SCROLL_ENABLED,
     val statusScrollActive: Boolean = false,
     val statusScrollRounds: Int = ModulePreferences.DEFAULT_STATUS_SCROLL_ROUNDS,
     /** 免打扰：三种场景各自独立，见 [BubbleEnvironmentGate]。 */
@@ -128,7 +128,7 @@ internal data class BubbleSettings(
                 autoDismiss = snapshot.bubbleAutoDismiss,
                 continuousMotion = snapshot.bubbleMotionContinuous,
                 statusScrollEnabled = snapshot.statusScrollEnabled,
-                statusScrollActive = snapshot.enabled && snapshot.statusScrollEnabled,
+                statusScrollActive = snapshot.statusScrollActive,
                 statusScrollRounds =
                     ModulePreferences.coerceStatusScrollRounds(snapshot.statusScrollRounds),
                 skipForeground = snapshot.bubbleSkipForeground,

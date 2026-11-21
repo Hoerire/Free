@@ -123,7 +123,7 @@ internal data class ModuleSettingsSnapshot(
     val bubbleAutoDismiss: Boolean = ModulePreferences.DEFAULT_BUBBLE_AUTO_DISMISS,
     /** 装饰动效是否常驻（贴边呼吸、色散边）；关闭后只在交互时重绘。 */
     val bubbleMotionContinuous: Boolean = ModulePreferences.DEFAULT_BUBBLE_MOTION_CONTINUOUS,
-    /** 状态栏滚动：最新通知在时钟位置滚动显示。 */
+    /** 状态栏滚动：最新通知在时钟位置滚动显示。子开关，受气泡总闸约束。 */
     val statusScrollEnabled: Boolean = ModulePreferences.DEFAULT_STATUS_SCROLL_ENABLED,
     val statusScrollRounds: Int = ModulePreferences.DEFAULT_STATUS_SCROLL_ROUNDS,
     /** 免打扰：当前应用 / 游戏 / 锁屏与息屏三种场景各自独立。 */
@@ -189,7 +189,7 @@ internal data class ModuleSettingsSnapshot(
     /** 内容浮层是否生效：气泡生效 ×「内容浮层」。 */
     val bubblePreviewActive: Boolean get() = bubbleActive && bubblePreviewEnabled
 
-    /** 状态栏滚动是否生效：随气泡功能总闸。 */
+    /** 状态栏滚动跟随气泡总闸：总闸一关，它也跟着停。 */
     val statusScrollActive: Boolean get() = bubbleActive && statusScrollEnabled
 
     /** 即时建议总闸：随气泡功能总闸。 */
@@ -721,10 +721,11 @@ internal data class ModuleSettingsSnapshot(
                     ModulePreferences.KEY_BUBBLE_MOTION_CONTINUOUS,
                     ModulePreferences.DEFAULT_BUBBLE_MOTION_CONTINUOUS,
                 ),
-                statusScrollEnabled = preferences.getBoolean(
-                    ModulePreferences.KEY_STATUS_SCROLL_ENABLED,
-                    ModulePreferences.DEFAULT_STATUS_SCROLL_ENABLED,
-                ),
+                statusScrollEnabled =
+                    preferences.getBoolean(
+                        ModulePreferences.KEY_STATUS_SCROLL_ENABLED,
+                        ModulePreferences.DEFAULT_STATUS_SCROLL_ENABLED,
+                    ),
                 statusScrollRounds = ModulePreferences.coerceStatusScrollRounds(
                     preferences.getInt(
                         ModulePreferences.KEY_STATUS_SCROLL_ROUNDS,

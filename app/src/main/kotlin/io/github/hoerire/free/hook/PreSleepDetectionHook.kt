@@ -14,7 +14,7 @@ import io.github.libxposed.api.XposedModule
  *
  * `PowerManagerService` 每次重算用户活动汇总时会给出屏幕所处的阶段：
  * 仅 DIMMED 位（2）或汇总为 0，表示屏幕正在变暗、马上要睡。这里把结论写进
- * [ModulePreferences.KEY_PRE_SLEEP_ARMED]，SystemUI 侧轮询该标志后铺点按层。
+ * [ModulePreferences.KEY_PRE_SLEEP_ARMED]，SystemUI 侧轮询该标志后弹一颗「保持常亮」气泡。
  *
  * 两条约束：
  * 1. 钩子运行在 PowerManagerService 持锁的路径上，函数内不做 binder 调用，
@@ -71,7 +71,37 @@ internal class PreSleepDetectionHook(
         if (!snapshot.suggestionsActive || !snapshot.suggestionKeepAwake) return
         val armed = if (isDimOrSleepImminent(service)) 1 else 0
         if (armed == lastArmed) return
+        probe(service, armed)
         handler.post { write(armed) }
+    }
+
+    /**
+     * 诊断：把判定所看到的原始信号打出来。
+     *
+     * 走 DEBUG 通道（不受 `info` 的按 code 去重影响），只在取值翻转时输出，
+     * 每次翻转一行。播放视频时屏幕本来就不该睡（应用自己举着 `FLAG_KEEP_SCREEN_ON`），
+     * 若那时仍然判定为「即将休眠」，这一行会显示到底是哪个字段算错的。
+     */
+    private fun probe(service: Any?, armed: Int) {
+        runCatching {
+            val legacy = OemReflection.readField(service, "mUserActivitySummary")
+            val stayOn = OemReflection.readField(service, "mStayOn")
+            val override =
+                OemReflection.readField(service, "mUserActivityTimeoutOverrideFromWindowManager")
+            val groups =
+                powerGroupsOf(service).map { group ->
+                    val wakefulness = OemReflection.readField(group, "mWakefulness")
+                    val summary = OemReflection.readField(group, "mUserActivitySummary")
+                    val timeout = OemReflection.readField(group, "mScreenOffTimeout")
+                    "w" + wakefulness + "s" + summary + "t" + timeout
+                }
+            logger(
+                Log.DEBUG,
+                "PRESLEEP_PROBE_arm" + armed + "_legacy[" + legacy + "]_groups" + groups +
+                    "_stayOn" + stayOn + "_ovr" + override,
+                null,
+            )
+        }
     }
 
     /**

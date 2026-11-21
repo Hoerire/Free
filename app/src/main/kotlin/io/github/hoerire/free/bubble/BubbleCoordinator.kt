@@ -954,7 +954,7 @@ internal class BubbleCoordinator(
             log(if (updated.active) "BUBBLE_FEATURE_ON" else "BUBBLE_FEATURE_OFF", null)
         }
         statusTicker?.applySettings(updated)
-        // 常亮建议的轮询跟随开关，关掉就立刻撤掉半暗层。
+        // 常亮建议的轮询跟随开关，关掉就立刻停手并释放已经拿到的常亮。
         suggestions?.onSettingsChanged()
         if (!updated.active) {
             if (previous.active) dismissAll()

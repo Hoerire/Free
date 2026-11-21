@@ -214,7 +214,9 @@ private fun BubbleOverview(
     onSettingsChange: (transform: BubbleSettingsTransform) -> Unit,
 ) {
     val settings = state.settings
-    val bubbleEditable = state.settingsEditable && settings.enabled
+    // 模块总开关决定能否改动；气泡总闸决定下面所有条目是否可用。
+    val masterEditable = state.settingsEditable && settings.enabled
+    val bubbleEditable = masterEditable && settings.bubbleEnabled
     SettingsPage(title = stringResource(R.string.bubble_screen_title), onBack = onBack) {
         item(key = "intro") {
             Text(
@@ -233,8 +235,8 @@ private fun BubbleOverview(
                     },
                     title = stringResource(R.string.bubble_enabled_title),
                     summary = stringResource(R.string.bubble_enabled_summary),
-                    enabled = bubbleEditable,
-                    startAction = { PreferenceIcon(Icons.Rounded.Notifications, bubbleEditable) },
+                    enabled = masterEditable,
+                    startAction = { PreferenceIcon(Icons.Rounded.Notifications, masterEditable) },
                 )
                 SwitchPreference(
                     checked = settings.bubblePreviewSuppressBanner,
@@ -372,7 +374,7 @@ private fun BubbleAppsPage(
     onSettingsChange: (transform: BubbleSettingsTransform) -> Unit,
 ) {
     val settings = state.settings
-    val bubbleEditable = state.settingsEditable && settings.enabled
+    val bubbleEditable = state.settingsEditable && settings.enabled && settings.bubbleEnabled
     val appByPackage = remember(apps) { apps.associateBy(SelectableEntry::packageName) }
     val cloneByKey = remember(clones) { clones.associateBy(CloneApp::key) }
     val cloneIndexByKey =
@@ -526,7 +528,7 @@ private fun BubbleAppearancePage(
     onSettingsChange: (transform: BubbleSettingsTransform) -> Unit,
 ) {
     val settings = state.settings
-    val bubbleEditable = state.settingsEditable && settings.enabled
+    val bubbleEditable = state.settingsEditable && settings.enabled && settings.bubbleEnabled
     SettingsPage(title = stringResource(R.string.bubble_group_appearance), onBack = onBack) {
         item(key = "appearance") {
             SettingsGroup(modifier = Modifier.fillMaxWidth()) {
@@ -615,7 +617,7 @@ private fun BubbleTimingPage(
     onSettingsChange: (transform: BubbleSettingsTransform) -> Unit,
 ) {
     val settings = state.settings
-    val bubbleEditable = state.settingsEditable && settings.enabled
+    val bubbleEditable = state.settingsEditable && settings.enabled && settings.bubbleEnabled
     SettingsPage(title = stringResource(R.string.bubble_group_timing), onBack = onBack) {
         item(key = "timing") {
             SettingsGroup(modifier = Modifier.fillMaxWidth()) {
@@ -672,7 +674,7 @@ private fun BubblePreviewPage(
     onSettingsChange: (transform: BubbleSettingsTransform) -> Unit,
 ) {
     val settings = state.settings
-    val bubbleEditable = state.settingsEditable && settings.enabled
+    val bubbleEditable = state.settingsEditable && settings.enabled && settings.bubbleEnabled
     SettingsPage(title = stringResource(R.string.bubble_group_preview), onBack = onBack) {
         item(key = "preview") {
             SettingsGroup(modifier = Modifier.fillMaxWidth()) {
@@ -762,7 +764,7 @@ private fun BubbleStatusScrollPage(
     onSettingsChange: (transform: BubbleSettingsTransform) -> Unit,
 ) {
     val settings = state.settings
-    val bubbleEditable = state.settingsEditable && settings.enabled
+    val bubbleEditable = state.settingsEditable && settings.enabled && settings.bubbleEnabled
     SettingsPage(title = stringResource(R.string.bubble_group_status_scroll), onBack = onBack) {
         item(key = "status_scroll") {
             SettingsGroup(modifier = Modifier.fillMaxWidth()) {
@@ -809,7 +811,7 @@ private fun BubbleSuggestionsPage(
     onSettingsChange: (transform: BubbleSettingsTransform) -> Unit,
 ) {
     val settings = state.settings
-    val bubbleEditable = state.settingsEditable && settings.enabled
+    val bubbleEditable = state.settingsEditable && settings.enabled && settings.bubbleEnabled
     SettingsPage(title = stringResource(R.string.bubble_group_suggestions), onBack = onBack) {
         item(key = "suggestions") {
             SettingsGroup(modifier = Modifier.fillMaxWidth()) {
