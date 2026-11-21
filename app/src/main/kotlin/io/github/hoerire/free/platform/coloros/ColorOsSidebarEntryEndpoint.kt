@@ -205,21 +205,42 @@ internal class ColorOsSidebarEntryEndpoint(
         if (current !== request || !request.active.get()) return
         try {
             if (!allowed()) { finish(request); return }
-            // 侧边栏主视图没准备好时只等一小段时间：部分版本上 ready() 永远为 false，
-            // 一直等下去会让目录请求静默超时（扇形里没有侧边栏工具可选）。
-            val ready = entries.ready()
-            if (!ready) {
-                request.readyRetries++
-                if (request.readyRetries < READY_RETRY_LIMIT) {
-                    handler.postDelayed({ prepare(request, entries) }, 50L)
-                    return
-                }
-                log(Log.WARN, "SIDEBAR_ENTRY_READY_FALLBACK", null)
-            }
             val target = request.target
             if (target == null) {
+                // 目录只有一个来源：观察结果。老探针链路已经整段删除，
+                // 因此这里既不看 ready、也不唤醒任何 OEM 单例。
                 execute(request) {
-                    val loaded = entries.load(Process.myUid() / 100_000)
+                    val userId = Process.myUid() / 100_000
+                    var loaded =
+                        runCatching { entries.mapObserved(userId) }.getOrNull().orEmpty()
+                    // 侧边栏进程刚起来时，OEM 还没自己枚举过一次，观察表是空的。
+                    // 与其让 App 干等满 7 秒再超时，不如在这里等一小段（面板通常几秒内就构建），
+                    // 仍然没有就立刻回 FAILED，让 App 按退避重试。
+                    if (loaded.isEmpty()) {
+                        val until = minOf(
+                            SystemClock.uptimeMillis() + OBSERVATION_WAIT_MS,
+                            request.deadline - OBSERVATION_WAIT_GUARD_MS,
+                        )
+                        while (loaded.isEmpty() && request.active.get() &&
+                            SystemClock.uptimeMillis() < until
+                        ) {
+                            try {
+                                Thread.sleep(OBSERVATION_POLL_MS)
+                            } catch (_: InterruptedException) {
+                                break
+                            }
+                            loaded = runCatching { entries.mapObserved(userId) }.getOrNull().orEmpty()
+                        }
+                    }
+                    log(Log.DEBUG, "SIDEBAR_CATALOG_OBSERVED_ENTRIES_" + loaded.size, null)
+                    if (loaded.isEmpty()) {
+                        // 面板从未构建过：目录为空是预期行为（模块依赖「更多」面板），
+                        // 立刻回 FAILED，别让 App 卡在 Loading 里等到超时。
+                        log(Log.DEBUG, "SIDEBAR_CATALOG_NOT_OBSERVED", null)
+                        send(request, SidebarEntryProtocol.message(SidebarEntryProtocol.FAILED, request.id))
+                        handler.post { finish(request) }
+                        return@execute
+                    }
                     for ((index, entry) in loaded.withIndex()) {
                         if (!request.active.get() || SystemClock.uptimeMillis() >= request.deadline || !allowed()) return@execute
                         request.reply.send(SidebarEntryProtocol.item(request.id, index, entry))
@@ -230,6 +251,16 @@ internal class ColorOsSidebarEntryEndpoint(
                     handler.post { finish(request) }
                 }
             } else {
+                // 启动固定条目仍走原生路由，这里才需要等面板就绪。
+                val ready = entries.ready()
+                if (!ready) {
+                    request.readyRetries++
+                    if (request.readyRetries < READY_RETRY_LIMIT) {
+                        handler.postDelayed({ prepare(request, entries) }, 50L)
+                        return
+                    }
+                    log(Log.WARN, "SIDEBAR_ENTRY_READY_FALLBACK", null)
+                }
                 if (!launchAllowed(target) || (ready && !entries.sidebarHidden())) { finish(request); return }
                 request.prepared = entries
                 execute(request) { send(request, SidebarEntryProtocol.message(SidebarEntryProtocol.PREPARED, request.id)) }
@@ -318,5 +349,10 @@ internal class ColorOsSidebarEntryEndpoint(
     private companion object {
         /** ready() 最多等 800 毫秒（50ms × 16），之后不再等，按不可用兜底继续。 */
         const val READY_RETRY_LIMIT = 16
+
+        /** 等 OEM 自己枚举出条目：最多等这么久，并且给请求截止时间留出余量。 */
+        const val OBSERVATION_WAIT_MS = 2_500L
+        const val OBSERVATION_WAIT_GUARD_MS = 600L
+        const val OBSERVATION_POLL_MS = 100L
     }
 }

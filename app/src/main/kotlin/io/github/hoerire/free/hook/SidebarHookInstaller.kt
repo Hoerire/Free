@@ -16,6 +16,7 @@ import io.github.hoerire.free.platform.coloros.ColorOsAllAppsContent
 import io.github.hoerire.free.platform.coloros.ColorOsAllAppsEndpoint
 import io.github.hoerire.free.platform.coloros.ColorOsSidebarEntryEndpoint
 import io.github.hoerire.free.platform.coloros.ColorOsSidebarTarget
+import io.github.hoerire.free.platform.coloros.SidebarCatalogObservation
 import io.github.hoerire.free.platform.coloros.SidebarEntryProtocol
 import io.github.hoerire.free.platform.coloros.ColorOsSidebarVisualTarget
 import java.io.File
@@ -26,6 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 /** 只注入侧边栏 UI 进程；服务方法照常执行一次，应用/工具的启动仍交给原厂路由。 */
 internal class SidebarHookInstaller(private val module: XposedModule, private val configuration: ProcessConfiguration) {
     private var entryEndpoint: ColorOsSidebarEntryEndpoint? = null
+
     private var endpoint: ColorOsAllAppsEndpoint? = null
     private val settingsSyncInstalled = AtomicBoolean(false)
 
@@ -79,6 +81,34 @@ internal class SidebarHookInstaller(private val module: XposedModule, private va
                     chain.proceed()
                 }
             }
+    }
+
+    /**
+     * 只观察、不改行为：三个枚举方法返回后顺手记下它们算出来的条目对象。
+     *
+     * 方法名在个别版本上可能不同，取不到就跳过——观测为空时目录仍走原来的探针链路，
+     * 所以这里失败不会让功能更差。
+     */
+    private fun installCatalogObservation(loader: ClassLoader) {
+        val helper =
+            loader.loadClass("com.oplus.smartsidebar.panelview.edgepanel.data.entrybeans.EntryBeanHelper")
+        var installed = 0
+        for ((name, role) in OBSERVED_CATALOG_METHODS) {
+            val method = runCatching { helper.getMethod(name) }.getOrNull() ?: continue
+            module
+                .hook(method)
+                .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                .setId("free.sidebar.observe." + name)
+                .intercept { chain ->
+                    val result = chain.proceed()
+                    runCatching {
+                        io.github.hoerire.free.platform.coloros.SidebarCatalogObservation.observe(role, result)
+                    }
+                    result
+                }
+            installed++
+        }
+        log(Log.INFO, "SIDEBAR_CATALOG_OBSERVER_" + installed, null)
     }
 
     /** 从工具实例上取 Context（AbsTool.mContext）。 */
@@ -225,6 +255,10 @@ internal class SidebarHookInstaller(private val module: XposedModule, private va
                 log(Log.INFO, "SIDEBAR_READY_BROADCAST_SENT", null)
                 if (app != null) installSettingsSync(app)
             }.onFailure { log(Log.WARN, "SIDEBAR_READY_BROADCAST_FAILED", it) }
+            // 观察式目录：钩住侧边栏自己枚举条目的三个方法，把它算出来的对象留一份在本进程里。
+            // 之后目录请求直接用这份观测结果，不再受 Provider 唤醒与面板 ready 的限制。
+            runCatching { installCatalogObservation(loader) }
+                .onFailure { log(Log.WARN, "SIDEBAR_CATALOG_OBSERVER_FAILED", it) }
             // 识屏：把原生 handle() 的启动改由 system_server 代发，缺这个工具条目的机型自动跳过。
             runCatching { installScreenIdentifyRedirect(loader) }
                 .onFailure { log(Log.WARN, "SCREEN_IDENTIFY_REDIRECT_FAILED", it) }
@@ -342,5 +376,11 @@ internal class SidebarHookInstaller(private val module: XposedModule, private va
     private fun log(priority: Int, code: String, throwable: Throwable?) = ModuleLog.forward(priority, code, throwable)
 
     private companion object {
+        /** 侧边栏自己枚举条目时用到的三个方法；只观察返回值，不改变其行为。 */
+        val OBSERVED_CATALOG_METHODS = listOf(
+            "getShownApps" to SidebarCatalogObservation.Role.ShownApps,
+            "getShownShortcuts" to SidebarCatalogObservation.Role.Shortcuts,
+            "getAllAppListForTool" to SidebarCatalogObservation.Role.Tools,
+        )
     }
 }
