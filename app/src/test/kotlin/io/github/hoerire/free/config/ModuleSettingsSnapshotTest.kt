@@ -71,6 +71,17 @@ class ModuleSettingsSnapshotTest {
         assertFalse(snapshot.handleSwipeUpToMiniEnabled)
         assertTrue(snapshot.pauseInLandscape)
         assertTrue(snapshot.pauseInGameMode)
+        // 呼吸特效默认开启（幅度只有 ±2%），关掉后不应被默认值覆盖回去。
+        assertTrue(snapshot.radialBreathingEnabled)
+    }
+
+    @Test
+    fun radialBreathingRoundTripsBothStates() {
+        for (enabled in listOf(false, true)) {
+            val preferences = InMemoryPreferences()
+            ModuleSettingsSnapshot(radialBreathingEnabled = enabled).writeTo(preferences.edit()).commit()
+            assertEquals(enabled, ModuleSettingsSnapshot.readFrom(preferences).radialBreathingEnabled)
+        }
     }
 
     @Test

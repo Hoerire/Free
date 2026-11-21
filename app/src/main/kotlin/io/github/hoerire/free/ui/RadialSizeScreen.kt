@@ -15,6 +15,7 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BlurCircular
 import androidx.compose.material.icons.rounded.UnfoldLess
 import androidx.compose.material.icons.rounded.UnfoldMore
+import androidx.compose.material.icons.rounded.Waves
 import androidx.compose.material.icons.rounded.ZoomOutMap
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -38,6 +39,7 @@ import io.github.hoerire.free.gesture.RadialGeometry
 import io.github.hoerire.free.ui.component.ArrowPreference
 import io.github.hoerire.free.ui.component.PreferenceIcon
 import io.github.hoerire.free.ui.component.SettingsGroup
+import io.github.hoerire.free.ui.component.SwitchPreference
 import io.github.hoerire.free.window.RadialIconGeometry
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.PI
@@ -45,7 +47,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * 外观参数页：图标大小、扇形大小、背景遮罩、展开/收回时长，以及「选中特效」入口。
+ * 外观参数页：图标大小、扇形大小、背景遮罩、展开/收回时长、呼吸特效，以及「选中特效」入口。
  *
  * 命中范围属于判定参数，放在一级页与「触发范围」相邻，不在这里。
  * 页顶是实时示意图（命中圈按当前命中范围画），
@@ -60,6 +62,7 @@ internal fun RadialSizeScreen(
     onBackdropLevelChange: (Int) -> Unit,
     onRadialExpandDurationChange: (Int) -> Unit,
     onRadialRetractDurationChange: (Int) -> Unit,
+    onRadialBreathingChange: (Boolean) -> Unit,
     onNavigateToRadialEffect: () -> Unit,
 ) {
     val enabled = state.settingsEditable && state.settings.enabled
@@ -150,6 +153,14 @@ internal fun RadialSizeScreen(
                     valueUnitRes = R.string.ms_value,
                     onPreviewChange = {},
                     onCommit = onRadialRetractDurationChange,
+                )
+                SwitchPreference(
+                    checked = state.settings.radialBreathingEnabled,
+                    onCheckedChange = onRadialBreathingChange,
+                    title = stringResource(R.string.radial_breathing_title),
+                    summary = stringResource(R.string.radial_breathing_summary),
+                    enabled = enabled,
+                    startAction = { PreferenceIcon(Icons.Rounded.Waves, enabled) },
                 )
                 ArrowPreference(
                     title = stringResource(R.string.radial_effect_group_title),

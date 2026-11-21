@@ -183,6 +183,14 @@ internal object ModulePreferences {
     /** 选中流光的参数集合；存成一行分隔串，见 [RadialShimmer]。 */
     const val KEY_RADIAL_SHIMMER = "radial_shimmer_v1"
 
+    /**
+     * 呼吸特效：扇形里的图标持续轻微起伏。
+     *
+     * 和气泡贴边时那口气一样：振幅 ±2%、周期 4.2 秒，逐格错开一点相位，
+     * 看起来是整排图标在缓缓呼吸，而不是齐刷刷同时缩放。
+     */
+    const val KEY_RADIAL_BREATHING_ENABLED = "radial_breathing_enabled_v1"
+
     /** 扇形半径（百分比）：左右两侧共用同一个值，同时放大或缩小。 */
     const val KEY_RADIAL_RADIUS_PERCENT = "radial_radius_percent_v1"
 
@@ -421,6 +429,8 @@ internal object ModulePreferences {
     /** 扇形交互默认开启：不想要扇形菜单的用户在设置里关掉即可。 */
     const val DEFAULT_RADIAL_INTERACTION_ENABLED = true
     const val DEFAULT_RADIAL_SHIMMER_ENABLED = false
+    /** 呼吸特效默认开启：幅度只有 ±2%，不喜欢可以在外观细节里关掉。 */
+    const val DEFAULT_RADIAL_BREATHING_ENABLED = true
     /** 解除限制默认关闭：改写的是系统级拖拽准入，由用户主动开启。 */
     const val DEFAULT_FREE_DRAG = false
     /**

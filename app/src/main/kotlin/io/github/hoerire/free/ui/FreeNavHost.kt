@@ -98,6 +98,7 @@ internal fun FreeNavHost(
     onRadialIconSizeChange: (Int) -> Unit,
     onRadialExpandDurationChange: (Int) -> Unit,
     onRadialRetractDurationChange: (Int) -> Unit,
+    onRadialBreathingChange: (Boolean) -> Unit,
     onBackdropLevelChange: (Int) -> Unit,
     onOutsideTapCloseModeChange: (OutsideTapCloseMode) -> Unit,
     onHandleSwipeUpToMiniEnabledChange: (Boolean) -> Unit,
@@ -318,6 +319,7 @@ internal fun FreeNavHost(
                     onBackdropLevelChange = onBackdropLevelChange,
                     onRadialExpandDurationChange = onRadialExpandDurationChange,
                     onRadialRetractDurationChange = onRadialRetractDurationChange,
+                    onRadialBreathingChange = onRadialBreathingChange,
                     onNavigateToRadialEffect = navigateToRadialEffect,
                 )
             AppRoute.ZoomOptions ->

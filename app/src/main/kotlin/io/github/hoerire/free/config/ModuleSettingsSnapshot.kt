@@ -83,6 +83,8 @@ internal data class ModuleSettingsSnapshot(
     val radialShimmerEnabled: Boolean = ModulePreferences.DEFAULT_RADIAL_SHIMMER_ENABLED,
     /** 选中流光的参数（速度、亮度、宽度、发光等）。 */
     val radialShimmer: RadialShimmer = RadialShimmer(),
+    /** 呼吸特效：扇形图标持续轻微起伏。 */
+    val radialBreathingEnabled: Boolean = ModulePreferences.DEFAULT_RADIAL_BREATHING_ENABLED,
     /** 扇形半径百分比：左右两侧同步放大或缩小。 */
     val radialRadiusPercent: Int = ModulePreferences.DEFAULT_RADIAL_RADIUS_PERCENT,
     /**
@@ -285,6 +287,7 @@ internal data class ModuleSettingsSnapshot(
             .putBoolean(ModulePreferences.KEY_RADIAL_KEEP_OPEN, radialKeepOpen)
             .putBoolean(ModulePreferences.KEY_RADIAL_SHIMMER_ENABLED, radialShimmerEnabled)
             .putString(ModulePreferences.KEY_RADIAL_SHIMMER, radialShimmer.encode())
+            .putBoolean(ModulePreferences.KEY_RADIAL_BREATHING_ENABLED, radialBreathingEnabled)
             .putInt(
                 ModulePreferences.KEY_RADIAL_RADIUS_PERCENT,
                 ModulePreferences.coerceRadialRadiusPercent(radialRadiusPercent),
@@ -640,6 +643,11 @@ internal data class ModuleSettingsSnapshot(
                     ModulePreferences.KEY_RADIAL_SHIMMER_ENABLED,
                     ModulePreferences.DEFAULT_RADIAL_SHIMMER_ENABLED,
                 ),
+                radialBreathingEnabled =
+                    preferences.getBoolean(
+                        ModulePreferences.KEY_RADIAL_BREATHING_ENABLED,
+                        ModulePreferences.DEFAULT_RADIAL_BREATHING_ENABLED,
+                    ),
                 radialShimmer = RadialShimmer.decode(
                     preferences.getString(ModulePreferences.KEY_RADIAL_SHIMMER, null),
                 ),

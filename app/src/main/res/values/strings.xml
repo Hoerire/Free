@@ -99,10 +99,12 @@
     <string name="radial_interaction_summary">关闭后底角手势全部停用</string>
     <string name="radial_keep_open_title">保持挂起</string>
     <string name="radial_keep_open_summary">松手保持扇形菜单，可以继续滑动点选应用</string>
+  <string name="radial_breathing_title">呼吸特效</string>
+  <string name="radial_breathing_summary">图标两秒一口气地起伏，逐格错峰；关闭后完全静止</string>
   <string name="radial_effect_group_title">选中特效</string>
   <string name="radial_effect_entry_summary">流光特效 · 选中放大 · 选中外顶</string>
   <string name="radial_size_page_title">外观细节</string>
-  <string name="radial_size_entry_summary">图标大小 · 扇形大小 · 背景遮罩 · 时长 · 选中特效</string>
+  <string name="radial_size_entry_summary">图标大小 · 扇形大小 · 背景遮罩 · 时长 · 呼吸 · 选中特效</string>
   <string name="radial_size_preview_hint">拖动滑杆时，这张示意图会跟着变</string>
   <string name="radial_shimmer_enabled_title">流光特效</string>
   <string name="radial_shimmer_enabled_summary">选中项外沿的常亮光圈、星头与运动轨迹</string>

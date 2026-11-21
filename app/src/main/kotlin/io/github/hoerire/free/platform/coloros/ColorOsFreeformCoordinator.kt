@@ -271,6 +271,7 @@ internal class ColorOsFreeformCoordinator(
                 keepOpen = false,
                 shimmerEnabled = lastSettings.radialShimmerEnabled,
                 shimmer = lastSettings.radialShimmer,
+                breathingEnabled = lastSettings.radialBreathingEnabled,
             )
             trace("SYSTEM_OVERLAY_PREWARM_STARTED")
         } catch (_: Throwable) {
@@ -1023,6 +1024,7 @@ internal class ColorOsFreeformCoordinator(
                 keepOpen = keepOpen,
                 shimmerEnabled = lastSettings.radialShimmerEnabled,
                 shimmer = lastSettings.radialShimmer,
+                breathingEnabled = lastSettings.radialBreathingEnabled,
             )
             overlay = view
             // 扇形展开才读侧边栏目录：Provider 按需启动，早读必然失败。

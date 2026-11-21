@@ -62,6 +62,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.AbstractComposeView
@@ -202,6 +203,9 @@ internal class CornerRadialOverlayView(
     /** 流光特效：常亮光圈、星头与运动轨迹（动态），独立于选中光圈。 */
     private var shimmerEnabled = ModulePreferences.DEFAULT_RADIAL_SHIMMER_ENABLED
 
+    /** 呼吸特效：扇形里的图标持续轻微起伏；周期比气泡快得多，见 [BREATHING_PERIOD_SECONDS]。 */
+    private var breathingEnabled = ModulePreferences.DEFAULT_RADIAL_BREATHING_ENABLED
+
     /** 选中流光的可调参数，随每次呼出由设置注入。 */
     private var shimmer = RadialShimmer()
     /** 浮层显示时刻：呼出手势的抬手会作为 tap 落到这里，必须忽略。 */
@@ -281,11 +285,13 @@ internal class CornerRadialOverlayView(
         retractDurationMs: Int = ModulePreferences.DEFAULT_RADIAL_RETRACT_DURATION_MS,
         keepOpen: Boolean = false,
         shimmerEnabled: Boolean = ModulePreferences.DEFAULT_RADIAL_SHIMMER_ENABLED,
+        breathingEnabled: Boolean = ModulePreferences.DEFAULT_RADIAL_BREATHING_ENABLED,
         shimmer: RadialShimmer = RadialShimmer(),
     ) {
         check(!isAttachedToWindow) { "Overlay must be initialized before it is attached" }
         this.keepOpen = keepOpen
         this.shimmerEnabled = shimmerEnabled
+        this.breathingEnabled = breathingEnabled
         this.shimmer = shimmer
         this.side = side
         // 保持挂起不改变命中判定：滑动选格与点选统一使用「命中范围」的设定值。
@@ -720,14 +726,18 @@ internal class CornerRadialOverlayView(
         val itemColors = LocalRadialItemColors.current
         // 选中流光的旋转相位：只在动画可用时逐帧推进，关闭动画时停在固定角度。
         val shimmerAngle = remember { mutableFloatStateOf(0f) }
+        // 呼吸相位（0..2π）：与流光共用同一个帧循环，关掉动画时停在 0（不呼吸）。
+        val breathingPhase = remember { mutableFloatStateOf(0f) }
         if (animationsEnabled) {
             LaunchedEffect(Unit) {
                 var origin = -1L
                 while (true) {
                     withFrameNanos { now ->
                         if (origin < 0L) origin = now
-                        shimmerAngle.floatValue =
-                            ((now - origin) / NANOS_PER_SECOND * shimmer.speedDegPerSecond) % FULL_TURN_DEGREES
+                        val seconds = (now - origin) / NANOS_PER_SECOND
+                        shimmerAngle.floatValue = (seconds * shimmer.speedDegPerSecond) % FULL_TURN_DEGREES
+                        breathingPhase.floatValue =
+                            (seconds % BREATHING_PERIOD_SECONDS) / BREATHING_PERIOD_SECONDS * FULL_TURN_RADIANS
                     }
                 }
             }
@@ -786,6 +796,7 @@ internal class CornerRadialOverlayView(
                 dockY = dockY,
                 colors = itemColors,
                 shimmerAngle = shimmerAngle.floatValue,
+                breathingPhase = breathingPhase.floatValue,
             )
         }
     }
@@ -801,6 +812,7 @@ internal class CornerRadialOverlayView(
         dockY: Float,
         colors: RadialItemColors,
         shimmerAngle: Float,
+        breathingPhase: Float,
     ) {
         val direction = if (layout.side == CornerSide.Left) 1f else -1f
         val overshoot = direction * RadialEntryMotion.HORIZONTAL_OVERSHOOT_DP * metrics.pixelsPerBaseDp * motion.horizontalOvershoot
@@ -868,9 +880,24 @@ internal class CornerRadialOverlayView(
                     unitY * radialOffset * localProgress
             // 选中放大：只作用于被选中的那一格，默认 0（关闭）；邻格不放大。
             val emphasisScale = 1f + shimmer.selectionScalePercent / 100f * ringProgress
+            // 呼吸：每格错开一点相位，整排图标缓缓起伏而不是同时缩放。
+            // 面板模式（更多面板）和关闭动画时不参与。
+            val breathScale =
+                if (breathingEnabled && !panelModeState.value) {
+                    1f + BREATHING_AMPLITUDE * kotlin.math.sin(breathingPhase + index * BREATHING_PHASE_STEP)
+                } else {
+                    1f
+                }
             val scale = motion.iconScale * contentScale * emphasisScale
+            // 呼吸**不能**乘进绘制尺寸：drawImage 的目标尺寸是整数像素，尺寸逐帧变化会让图标
+            // 在整数之间来回跳，看起来是"抖"。改成画布矩阵缩放，由合成器做亚像素采样。
             val diameter = metrics.iconDiameter * scale
-            rotate(motion.rotationDegrees, pivot = Offset(centerX, centerY)) {
+            withTransform({
+                rotate(motion.rotationDegrees, pivot = Offset(centerX, centerY))
+                if (breathScale != 1f) {
+                    scale(breathScale, breathScale, pivot = Offset(centerX, centerY))
+                }
+            }) {
                 // 外发光归「流光特效」：它的亮度与范围就在流光参数页里。
                 if (shimmerEnabled && ringProgress > 0f) {
                     val glowRadius = diameter * shimmer.glowRadiusPercent / 100f
@@ -1705,7 +1732,21 @@ internal class CornerRadialOverlayView(
         /** 选中项放大幅度：1f → 1.2f，与每格 0→1 的进度动画相乘。 */
 
         const val FULL_TURN_DEGREES = 360f
+        const val FULL_TURN_RADIANS = 2f * PI.toFloat()
         const val NANOS_PER_SECOND = 1_000_000_000f
+
+        /**
+         * 呼吸特效的周期（秒）与振幅。
+         *
+         * 气泡是常驻的，4.2 秒一口气慢慢来正好；扇形只存在"按住到松手"这一两秒，
+         * 同一个周期根本看不到一次起伏，所以这里压缩到 2 秒（约半秒一个抬头），
+         * 振幅也略加一点，保证在这短短几秒里肉眼看得见。
+         */
+        const val BREATHING_PERIOD_SECONDS = 2.0f
+        const val BREATHING_AMPLITUDE = 0.025f
+
+        /** 相邻两格的相位差（弧度）：约 1/8 周期，错峰成一道缓慢的波。 */
+        const val BREATHING_PHASE_STEP = 0.78f
         /** 流星尾迹扫过的角度与分段数：分段换成宽度/亮度渐变的近似，足够平滑。 */
         const val METEOR_SWEEP_DEGREES = 220f
         const val METEOR_SEGMENTS = 20

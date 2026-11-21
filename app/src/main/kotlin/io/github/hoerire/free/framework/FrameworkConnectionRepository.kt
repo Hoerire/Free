@@ -142,6 +142,10 @@ internal class FrameworkConnectionRepository(private val context: Context) {
     fun setRadialShimmerEnabled(enabled: Boolean) =
         updateSettings { it.copy(radialShimmerEnabled = enabled) }
 
+    /** 呼吸特效：扇形图标持续轻微起伏。 */
+    fun setRadialBreathingEnabled(enabled: Boolean) =
+        updateSettings { it.copy(radialBreathingEnabled = enabled) }
+
     /** 选中流光的参数集合。 */
     fun setRadialShimmer(value: RadialShimmer) =
         updateSettings { it.copy(radialShimmer = value) }

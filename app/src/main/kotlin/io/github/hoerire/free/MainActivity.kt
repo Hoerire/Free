@@ -70,6 +70,7 @@ class MainActivity : ComponentActivity() {
                     onRadialIconSizeChange = repository::setRadialIconSizeDp,
                     onRadialExpandDurationChange = repository::setRadialExpandDurationMs,
                     onRadialRetractDurationChange = repository::setRadialRetractDurationMs,
+                    onRadialBreathingChange = repository::setRadialBreathingEnabled,
                     onBackdropLevelChange = repository::setBackdropLevel,
                     onOutsideTapCloseModeChange = repository::setOutsideTapCloseMode,
                     onHandleSwipeUpToMiniEnabledChange =
