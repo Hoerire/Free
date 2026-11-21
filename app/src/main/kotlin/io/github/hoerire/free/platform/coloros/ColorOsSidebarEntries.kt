@@ -18,14 +18,13 @@ import io.github.hoerire.free.config.PinnedTargetCodec
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Method
 
-/**
- * 侧边栏目录及执行适配。
- *
- * 目录**只**来自观察结果（[SidebarCatalogObservation]）：本类不再主动向 OEM 要清单，
- * 老探针链路（OEM 单例 + 三个枚举方法）已整段删除。侧边栏没被打开过时就没有观测数据，
- * 目录为空——模块本来就依赖「更多」面板，这是预期行为。
- */
+/** 侧边栏目录及执行适配；不保存原生条目，不自行初始化厂商数据所有者。 */
 internal class ColorOsSidebarEntries(private val context: Context, loader: ClassLoader) {
+    private val helperClass = loader.loadClass("com.oplus.smartsidebar.panelview.edgepanel.data.entrybeans.EntryBeanHelper")
+    private val active = helperClass.getMethod("getActiveInstance")
+    private val tools = helperClass.getMethod("getAllAppListForTool")
+    private val apps = helperClass.getMethod("getShownShortcuts")
+    private val shownApps = helperClass.getMethod("getShownApps")
     private val beanClass = loader.loadClass("com.oplus.smartsidebar.panelview.edgepanel.data.entrybeans.models.beans.EntryBean")
     private val type = beanClass.getMethod("getType")
     private val category = beanClass.getMethod("getCategory")
@@ -51,7 +50,7 @@ internal class ColorOsSidebarEntries(private val context: Context, loader: Class
     private val getResident = handlerClass.getMethod("getMResidentProcessHandler")
     private val getState = getMain.returnType.getMethod("getMState")
 
-    fun ready(): Boolean = getMain.call(handler) != null &&
+    fun ready(): Boolean = active.call(null) != null && getMain.call(handler) != null &&
         (getResident.call(handler) as? IInterface)?.asBinder()?.isBinderAlive == true
 
     fun sidebarHidden(): Boolean = getMain.call(handler)?.let { (getState.call(it) as? Enum<*>)?.name } == "FLOAT_BAR_SHOWING"
@@ -59,26 +58,8 @@ internal class ColorOsSidebarEntries(private val context: Context, loader: Class
     /** 目录加载时同时记录 target → 原生 bean，启动时无需再次枚举全表。 */
     private val resolvedBeans = java.util.concurrent.ConcurrentHashMap<PinnedTarget.Sidebar, Any>()
 
-    /**
-     * 用观察到的条目拼目录；规则与老链路完全一致：
-     * 工具 + 快捷方式/应用 + 只取分身的 shownApps。
-     */
-    fun mapObserved(userId: Int): List<SelectableEntry> {
-        val tools = SidebarCatalogObservation.beans(SidebarCatalogObservation.Role.Tools)
-        val shortcuts = SidebarCatalogObservation.beans(SidebarCatalogObservation.Role.Shortcuts)
-        val shown = SidebarCatalogObservation.beans(SidebarCatalogObservation.Role.ShownApps)
-            .filter { bean -> beanClass.isInstance(bean) && cloned.call(bean) == true }
-        if (tools.isEmpty() && shortcuts.isEmpty() && shown.isEmpty()) return emptyList()
-        return map(tools + shortcuts + shown, userId)
-    }
-
-    /**
-     * 把一批原始条目映射成目录项。
-     *
-     * 抽出来是为了"观察式目录"能复用同一套标签/图标解析：那批对象由侧边栏自己算出来，
-     * 这里只负责翻译，不再去调 OEM 单例。
-     */
-    fun map(beans: List<Any>, userId: Int): List<SelectableEntry> = beans.mapNotNull { bean ->
+    /** 与原生全部面板一致，在工作线程获取目录；图标压到固定上限后才跨进程传输。 */
+    fun load(userId: Int): List<SelectableEntry> = entries(includeClones = true).mapNotNull { bean ->
         val target = target(bean, userId) ?: return@mapNotNull null
         resolvedBeans[target] = bean
         val packageName = pkg.call(bean) as? String ?: ""
@@ -100,10 +81,9 @@ internal class ColorOsSidebarEntries(private val context: Context, loader: Class
     /** 目录查询在工作线程完成；主线程只校验已解析条目并调用原生路由。 */
     fun resolve(target: PinnedTarget.Sidebar): Any? =
         resolvedBeans[target]?.takeIf { beanClass.isInstance(it) }
-            ?: SidebarCatalogObservation.find { bean ->
-                beanClass.isInstance(bean) && target(bean, target.userId) == target
-            }
-            ?.also { resolvedBeans[target] = it }
+            ?: entries(includeClones = target.kind == PinnedTarget.Kind.CloneApp)
+                .firstOrNull { target(it, target.userId) == target }
+                ?.also { resolvedBeans[target] = it }
 
     fun launch(target: PinnedTarget.Sidebar, current: Any): Boolean {
         if (!beanClass.isInstance(current) || target(current, target.userId) != target) return false
@@ -113,6 +93,15 @@ internal class ColorOsSidebarEntries(private val context: Context, loader: Class
             PinnedTarget.Kind.AppEntry, PinnedTarget.Kind.CloneApp -> launchApp
         }.call(null, current)
         return true
+    }
+
+    private fun entries(includeClones: Boolean): List<Any> {
+        val owner = active.call(null) ?: throw IllegalStateException("SIDEBAR_ENTRIES_NOT_READY")
+        val result = (tools.call(owner) as? List<*>).orEmpty() + (apps.call(owner) as? List<*>).orEmpty() +
+            if (includeClones) (shownApps.call(owner) as? List<*>).orEmpty().filter { bean ->
+                bean != null && beanClass.isInstance(bean) && cloned.call(bean) == true
+            } else emptyList()
+        return result.filterNotNull().filter(beanClass::isInstance)
     }
 
     private fun target(bean: Any, userId: Int): PinnedTarget.Sidebar? {
