@@ -552,6 +552,12 @@ internal class CornerRadialOverlayView(
             if (animationsEnabled) {
                 // 取消与选中后收起共用设置里那一个「收回时长」：两条路径的节奏本来就一致。
                 val durationMillis = retractDurationMs.toLong()
+                // 入场曲线在 p≈1 附近是平的（末段回弹收敛），把进度线性反向播放时，
+                // 头一两百毫秒图标几乎不动——松手后就是"顿一下再收"。
+                // 先把进度让过这段平尾（位移约 3%，看不出来），后面每一帧都有明显位移。
+                if (entryProgress.value > RETRACT_START_PROGRESS) {
+                    entryProgress.snapTo(RETRACT_START_PROGRESS)
+                }
                 entryProgress.animateTo(
                     targetValue = 0f,
                     animationSpec =
@@ -1676,6 +1682,14 @@ internal class CornerRadialOverlayView(
          * 展开结束时刻仍然对齐 begin()；超过这个数就说明浮层被转场挂住了，整段重播。
          */
         const val ENTRY_COMPENSATION_LIMIT_MS = 120
+
+        /**
+         * 收起起始进度：跳过入场曲线末段的平尾。
+         *
+         * 0.88 对应半径只回缩约 3%，肉眼看不出来；但它让"松手→收回"从第一帧就开始动，
+         * 而不是先停一两百毫秒再动。
+         */
+        const val RETRACT_START_PROGRESS = 0.88f
 
         /** 等第一帧的下限：再久也不等了，宁可动起来也不要把浮层冻在零进度。 */
         const val ENTRY_VISIBILITY_WAIT_CAP_MS = 1200L
