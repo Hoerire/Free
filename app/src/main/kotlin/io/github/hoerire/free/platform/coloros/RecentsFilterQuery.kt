@@ -16,9 +16,6 @@ import org.luckypray.dexkit.DexKitBridge
 internal object RecentsFilterQuery {
     const val GROUPED_TASK_INFO = "com.android.wm.shell.shared.GroupedTaskInfo"
 
-    /** 查询规则版本；规则调整时递增。 */
-    const val RULE_VERSION = "launcher-recents-filter-v1"
-
     data class Symbols(val className: String, val methodName: String)
 
     fun find(bridge: DexKitBridge): List<Symbols> =

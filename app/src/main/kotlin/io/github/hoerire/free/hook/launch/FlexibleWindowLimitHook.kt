@@ -1,11 +1,11 @@
 package io.github.hoerire.free.hook.launch
 
-import android.util.Log
 import io.github.hoerire.free.log.ModuleLog
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import io.github.hoerire.free.hook.ProcessConfiguration
 import io.github.hoerire.free.hook.OemClasses
+import io.github.hoerire.free.platform.coloros.BubbleDemotionGuard
 
 /**
  * 解除系统对小窗的应用准入与数量限制。
@@ -46,6 +46,7 @@ internal class FlexibleWindowLimitHook(
 
     /** 待补打的小结；首次命中任意小窗钩子时输出一次。 */
     private var pendingReport: String? = null
+    private val graceReported = java.util.concurrent.atomic.AtomicBoolean(false)
 
     /** 各类的挂载情况，拼进小结。 */
     private var installedSummary: String = ""
@@ -107,8 +108,11 @@ internal class FlexibleWindowLimitHook(
                             // 迷你窗不占「小窗数量」额度：上限 = 设置值 + 迷你窗数。
                             // 只有 17 的语义是"浮动窗口上限"，16 是"总可见窗口上限"，
                             // 那边不叠加，避免把全屏任务也算进额度。
+                            // 气泡把旧窗口退成迷你窗时，系统可能还按旧状态算一次数量：
+                            // 这段过渡里临时多放一个，避免刚创建的新窗口被当作超限对象。
+                            val grace = if (BubbleDemotionGuard.recent()) 1 else 0
                             val override =
-                                settings.zoomMaxWindowCountEffective +
+                                settings.zoomMaxWindowCountEffective + grace +
                                     if (android.os.Build.VERSION.SDK_INT >= 37) miniWindowCount() else 0
                             if (maxWinNumReported.compareAndSet(false, true)) {
                                 ModuleLog.info("ZOOM_LIMIT_MAXNUM_FIRST_" + shortName(target.name) + "." +
@@ -170,13 +174,18 @@ internal class FlexibleWindowLimitHook(
                     .intercept { chain ->
                         val settings = configuration.snapshot
                         if (settings.zoomInteractionActive && environment?.isForegroundExcluded() != true) {
-                            if (cacheReported.compareAndSet(false, true)) {
-                                reportCachedFields(
-                                    chain.thisObject,
-                                    settings.zoomMaxWindowCountEffective,
-                                )
+                            // 迷你窗不占额度；气泡退迷你后的过渡期再临时多放一个。
+                            val extra =
+                                (if (android.os.Build.VERSION.SDK_INT >= 37) miniWindowCount() else 0) +
+                                    (if (BubbleDemotionGuard.recent()) 1 else 0)
+                            val limit = settings.zoomMaxWindowCountEffective + extra
+                            if (extra > 0 && graceReported.compareAndSet(false, true)) {
+                                ModuleLog.debug { "ZOOM_LIMIT_EXTRA_" + extra + "_TO_" + limit }
                             }
-                            applyCachedLimit(chain.thisObject, settings.zoomMaxWindowCountEffective)
+                            if (cacheReported.compareAndSet(false, true)) {
+                                reportCachedFields(chain.thisObject, limit)
+                            }
+                            applyCachedLimit(chain.thisObject, limit)
                         }
                         chain.proceed()
                     }

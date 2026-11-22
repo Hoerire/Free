@@ -146,12 +146,6 @@ internal class ColorOsEntryCatalog(
         }, if (first) 0L else GUARD_RETRY_MS)
     }
 
-    /** 兼容旧调用点：本实现没有"待发出的跨进程启动"，无需取消。 */
-    fun cancelLaunch() = Unit
-
-    /** 兼容旧调用点：本实现没有常驻连接。 */
-    fun cancel() = Unit
-
     fun invalidate() {
         local.invalidate()
     }

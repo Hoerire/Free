@@ -19,10 +19,7 @@ import android.util.Log
  * 模块本来就在 SystemUI 里有气泡子系统，所以把"启动翻译"这一件事转给 SystemUI 代发：
  * 两个进程之间只有一条单向广播，不传数据、不需要回执。
  */
-internal class TranslationRelay(
-    private val context: Context,
-    private val logger: (code: String, throwable: Throwable?) -> Unit,
-) {
+internal class TranslationRelay(private val context: Context) {
     private val TAG = "FreeTranslationRelay"
 
     fun start() {

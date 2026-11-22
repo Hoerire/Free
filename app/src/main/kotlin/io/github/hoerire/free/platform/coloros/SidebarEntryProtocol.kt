@@ -8,6 +8,5 @@ package io.github.hoerire.free.platform.coloros
  */
 internal object SidebarEntryProtocol {
     const val MODULE_PACKAGE = "io.github.hoerire.free"
-    const val MAX_ENTRIES = 256
     const val ICON_SIZE = 96
 }

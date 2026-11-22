@@ -113,7 +113,7 @@ internal class BubbleCoordinator(
         // 分身目录由 SystemUI 进程自己发布（本进程持有 MANAGE_USERS），不依赖 system_server。
         cloneCatalog = CloneCatalogPublisher(context, ::log).also { it.start() }
         // 屏幕翻译：翻译服务要求调用方持有 AI_APP，只有 SystemUI 这类系统应用能代启。
-        TranslationRelay(context, ::log).start()
+        TranslationRelay(context).start()
         // 即时建议：手电筒/耳机/应用安装由控制器自己监听；剪贴板由 system_server 广播。
         suggestions = ImmediateSuggestionController(context, suggestionHost).also { it.start() }
         registerClipboardReceiver()

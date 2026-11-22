@@ -135,6 +135,13 @@ internal object ModulePreferences {
     const val DEFAULT_AUTO_CLOSE_WINDOW = false
 
     /** 最近任务：把当前处于小窗状态的任务从最近任务卡片里隐藏。 */
+    /**
+     * 气泡点开小窗的时刻（Settings.Global 毫秒时间戳）。
+     *
+     * 点击气泡与系统真正创建小窗之间隔着一次跨进程调用，模块用这个时间窗告诉
+     * system_server「这次启动是气泡来的」。
+     */
+    const val KEY_BUBBLE_OPEN_AT = "free_bubble_open_at"
     const val KEY_HIDE_ZOOM_IN_RECENTS = "hide_zoom_in_recents_v1"
     const val DEFAULT_HIDE_ZOOM_IN_RECENTS = false
 

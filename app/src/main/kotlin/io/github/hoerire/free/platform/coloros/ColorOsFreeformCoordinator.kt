@@ -224,6 +224,7 @@ internal class ColorOsFreeformCoordinator(
     private var inputMethodResolved = false
 
     fun start() {
+        ColorOsFreeformRuntime.coordinator = this
         // 识屏宿主被限制后台运行会让三条入口同时失效；开机纠正一次，之后省电策略再改也不会失效。
         ScreenIdentifyAppOps.ensure(context)
         handler.post {
@@ -359,7 +360,6 @@ internal class ColorOsFreeformCoordinator(
         } else {
             sidebar.cancel()
             entryLaunchGeneration++
-            entryCatalog.cancel()
             unregisterPointerListener()
             activeEnvironmentApproved = false
             activeGestureConfig = null
@@ -536,7 +536,6 @@ internal class ColorOsFreeformCoordinator(
             if (event.actionMasked != MotionEvent.ACTION_DOWN && !pointerStreamGate.shouldForward(queued.stream)) return
             if (event.actionMasked == MotionEvent.ACTION_DOWN) {
                 entryLaunchGeneration++
-                entryCatalog.cancelLaunch()
             }
             handlePointerEvent(event)
             if (!shouldKeepPointerStream()) {
@@ -959,7 +958,6 @@ internal class ColorOsFreeformCoordinator(
         y: Float,
     ) {
         entryLaunchGeneration++
-        entryCatalog.cancelLaunch()
         removeOverlay()
         // 扇形呼出时收掉「更多」面板：面板是应用层之上的 overlay，留着会盖住扇形，
         // 也会盖住随后打开的小窗。这里只做这一件事，面板内部状态机不动。
@@ -1113,7 +1111,6 @@ internal class ColorOsFreeformCoordinator(
                 ((entry.target as? PinnedTarget.Sidebar)?.alias ?: "") + "_gen" + pointerGeneration,
         )
         entryLaunchGeneration++
-        entryCatalog.cancelLaunch()
         val generation = pointerGeneration
         activeEnvironmentApproved = false
         gestureEngine.cancel()
@@ -2209,6 +2206,40 @@ internal class ColorOsFreeformCoordinator(
         switchTaskState(task, MINI_SWITCH_STATE, MINI_REASON)
 
     /**
+     * 气泡点开新小窗、但窗口数量已满时调用：把最旧的一个普通小窗退成迷你窗。
+     *
+     * 迷你窗不占「小窗数量」额度，旧窗口因此得以保留，新窗口也能正常开成小窗；
+     * 用户之后点它的通知气泡还是能回到原样。返回是否真的切换成功。
+     */
+    internal fun demoteOldestOrdinaryToMini(
+        excludedPackage: String? = null,
+        excludedUserId: Int = -1,
+    ): Boolean {
+        val tasks = tasksOfFocusedDisplay() ?: return false
+        val ordinary = tasks.filter {
+            isTaskVisible(it) && flexZoomStateOf(it) == ColorOsFlexibleWindowState.ORDINARY
+        }
+        // 没到数量上限就不动：新窗口本来就能正常打开。
+        if (ordinary.size < lastSettings.zoomMaxWindowCountEffective) return false
+        // 气泡所属「实例」自己已经有普通小窗：这次是前置它，不是新开，不能把它缩小。
+        // 主应用与分身共用包名，必须连用户一起比，否则会把另一个微信实例的窗口留下。
+        val target = ordinary
+            .filter { task ->
+                val sameInstance = !excludedPackage.isNullOrEmpty() &&
+                    packageOfTask(task) == excludedPackage &&
+                    taskUserIdOf(task) == excludedUserId
+                !sameInstance
+            }
+            .minByOrNull { taskIdOf(it) } ?: return false
+        val switched = switchTaskToMini(target)
+        if (switched) {
+            BubbleDemotionGuard.arm()
+            logger(Log.INFO, "SYSTEM_BUBBLE_DEMOTE_MINI", null)
+        }
+        return switched
+    }
+
+    /**
      * 在系统全局锁内调用 `FlexibleTaskController#switchState(task, state, reason)`。
      *
      * 系统自己是从 `FlexibleTaskCaptionView` 的点击回调里、持锁状态下调这个方法；
@@ -2255,6 +2286,14 @@ internal class ColorOsFreeformCoordinator(
             state == MINI_ZOOM_STATE || state == READY_ZOOM_STATE
         }
     }
+
+    /** 任务所属用户（主用户 0 / 分身 999…）；读不到返回 -1。 */
+    private fun taskUserIdOf(task: Any): Int =
+        try {
+            (OemReflection.call(task, "getUserId") as? Int) ?: -1
+        } catch (_: RuntimeException) {
+            -1
+        }
 
     /** 任务编号，仅用于诊断与排序兜底。 */
     private fun taskIdOf(task: Any): Int =

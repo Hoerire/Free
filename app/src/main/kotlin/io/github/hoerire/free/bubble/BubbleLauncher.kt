@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.LauncherApps
 import android.os.Bundle
 import android.os.Process
+import android.os.SystemClock
 import android.os.UserHandle
 import android.provider.Settings
 import io.github.hoerire.free.config.ModulePreferences
@@ -31,6 +32,8 @@ internal class BubbleLauncher(
 
     fun open(item: BubbleItem): Boolean {
         val identity = item.identity
+        // 先留一个时间戳：气泡点开小窗时，数量满了要让旧窗口退成迷你窗，而不是被关掉。
+        markBubbleOpen()
         if (identity.isClone) {
             // 分身：优先用「通知自己那条深链」。system_server 在通知入库时把原始 Intent 捕获到
             // Settings.Global（[CloneDeepLinkStore]），这里取回后在分身用户上下文里重建并发送，
@@ -52,6 +55,16 @@ internal class BubbleLauncher(
         }
         logger("BUBBLE_OPEN_FAILED_" + identity.whitelistKey, null)
         return false
+    }
+
+    private fun markBubbleOpen() {
+        runCatching {
+            android.provider.Settings.Global.putLong(
+                context.contentResolver,
+                ModulePreferences.KEY_BUBBLE_OPEN_AT,
+                SystemClock.elapsedRealtime(),
+            )
+        }
     }
 
     /**

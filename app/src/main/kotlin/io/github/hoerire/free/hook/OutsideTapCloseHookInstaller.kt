@@ -7,7 +7,6 @@ import android.graphics.Rect
 import android.graphics.Region
 import android.graphics.RegionIterator
 import android.os.SystemClock
-import android.util.Log
 import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.View
@@ -19,6 +18,7 @@ import io.github.hoerire.free.config.OutsideTapCloseMode
 import io.github.hoerire.free.gesture.OutsideTapGestureEngine
 import io.github.hoerire.free.logic.CloseDecision
 import io.github.hoerire.free.logic.ClosePolicy
+import io.github.hoerire.free.platform.coloros.BubbleDemotionGuard
 import io.github.hoerire.free.platform.coloros.ColorOsDisplayContentImeAccess
 import io.github.hoerire.free.platform.coloros.WindowMuteEvents
 import io.github.hoerire.free.platform.coloros.ColorOsTaskImeBoundsAccess
@@ -222,14 +222,6 @@ internal class OutsideTapCloseHookInstaller(
     }
 
     /**
-     * 把「因新窗口替换而转成浮标」改成「直接关闭」。
-     *
-     * 系统的策略对象 ExitFlexibleTaskToFloatStrategy 会带一个来源标记，
-     * 其中 SOURCE_FROM_HANDLE_REPLACE_TO_FLOAT 表示"被新窗口挤出、收成浮标"。
-     * 在 controller.exitFlexibleTaskWindowInnerLocked 入口把它替换成 ToBack（关闭）策略，
-     * 结果是窗口被关掉而不是留下浮标；用户主动拖到边缘（其他来源）仍然保持原生行为。
-     */
-    /**
      * 把「因窗口超过上限被收成浮标」改成「直接关闭」。
      *
      * 判据是调用栈：超限路径固定经过 updateTaskMaxNumWhenFocusChanged / handleFlexibleExChange，
@@ -270,6 +262,12 @@ internal class OutsideTapCloseHookInstaller(
             .setId("free.system.replace_to_close")
             .intercept { chain ->
                 if (!configuration.snapshot.enabled) return@intercept chain.proceed()
+                // 气泡启动前刚把旧窗口退成迷你窗：这次超限裁决是旧计数算出来的，
+                // 放行不执行，避免刚出现的新窗口被收掉。
+                if (BubbleDemotionGuard.consume()) {
+                    ModuleLog.debug { "ZOOM_BUBBLE_EXIT_SKIPPED" }
+                    return@intercept null
+                }
                 val strategy = chain.args.getOrNull(0)
                 val isFloatExit = strategy != null && floatStrategyClass.isInstance(strategy)
                 // 长按静音的回收：退成浮标的窗口还有效，静音保持；其余退场（回后台、被替换关闭）

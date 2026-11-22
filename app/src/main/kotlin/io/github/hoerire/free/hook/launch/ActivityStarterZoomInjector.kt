@@ -1,8 +1,10 @@
 package io.github.hoerire.free.hook.launch
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
+import android.os.SystemClock
+import android.provider.Settings
 import io.github.libxposed.api.XposedInterface
 import io.github.hoerire.free.hook.ModuleEnvironmentState
 import io.github.libxposed.api.XposedModule
@@ -10,6 +12,7 @@ import io.github.hoerire.free.hook.ProcessConfiguration
 import io.github.hoerire.free.log.ModuleLog
 import io.github.hoerire.free.log.VerboseLog
 import io.github.hoerire.free.config.ModulePreferences
+import io.github.hoerire.free.platform.coloros.ColorOsFreeformRuntime
 import io.github.hoerire.free.hook.OemReflection
 
 /**
@@ -59,6 +62,8 @@ internal class ActivityStarterZoomInjector(
                     // 保证与其他同时启用的模块互不干扰。
                     if (!configuration.snapshot.enabled) return@intercept chain.proceed()
                     runCatching { trace(chain.thisObject, method.name) }
+                    // 气泡启动前的「旧窗退迷你」必须在系统做数量裁决之前完成。
+                    runCatching { demoteForBubbleLaunch(chain.thisObject) }
                     val preempted =
                         runCatching { preemptWithZoomWindow(chain.thisObject, method.name) }
                             .onFailure { ModuleLog.warn("ZOOM_PREEMPT_FAILED", it) }
@@ -98,6 +103,52 @@ internal class ActivityStarterZoomInjector(
      */
     @Volatile
     private var lastInjectTrampoline = false
+
+    /**
+     * 这次启动的目标「实例」：包名 + 用户。
+     *
+     * 主应用与分身包名相同，只比包名会把另一个实例的小窗留下，导致被系统当成超限关掉。
+     */
+    private fun bubbleTargetIdentity(starter: Any?): Pair<String?, Int> {
+        if (starter == null) return null to 0
+        val request = OemReflection.readField(starter, "mRequest")
+        val intent =
+            OemReflection.readField(starter, "mIntent") as? Intent
+                ?: (request?.let { OemReflection.readField(it, "intent") } as? Intent)
+                ?: return null to 0
+        val packageName = intent.component?.packageName ?: intent.getPackage()
+        val userId = runCatching {
+            intent.getIntExtra(MULTI_APP_CACHED_USER_ID_EXTRA, 0)
+        }.getOrDefault(0)
+        return packageName to userId
+    }
+
+    /**
+     * 气泡点开小窗时，如果数量已满，把最旧的普通小窗退成迷你窗再放行这次启动。
+     *
+     * 气泡点击与这里隔一次跨进程调用：SystemUI 在点开前写一个时间戳，
+     * 这里消费它，只在时间窗内生效一次，之后马上清零，不影响其它启动。
+     */
+    private fun demoteForBubbleLaunch(starter: Any?) {
+        val settings = configuration.snapshot
+        if (!settings.enabled || !settings.zoomInteractionActive) return
+        val context = systemContext() ?: return
+        val at = runCatching {
+            Settings.Global.getLong(context.contentResolver, ModulePreferences.KEY_BUBBLE_OPEN_AT)
+        }.getOrDefault(0L)
+        if (at <= 0L) return
+        val elapsed = SystemClock.elapsedRealtime() - at
+        if (elapsed < 0L || elapsed > BUBBLE_OPEN_WINDOW_MS) return
+        runCatching {
+            Settings.Global.putLong(context.contentResolver, ModulePreferences.KEY_BUBBLE_OPEN_AT, 0L)
+        }
+        val (targetPackage, targetUser) = bubbleTargetIdentity(starter)
+        val demoted = ColorOsFreeformRuntime.coordinator
+            ?.demoteOldestOrdinaryToMini(targetPackage, targetUser) == true
+        ModuleLog.debug(TAG) {
+            "BUBBLE_DEMOTE_" + (if (demoted) "OK" else "SKIP") + "_" + targetPackage + "_u" + targetUser
+        }
+    }
 
     private fun preemptWithZoomWindow(starter: Any?, stage: String): Boolean {
         if (starter == null) return false
@@ -916,6 +967,12 @@ internal class ActivityStarterZoomInjector(
     }
 
     private companion object {
+        /** 分身实例的用户标记（与气泡启动链路一致）。 */
+        const val MULTI_APP_CACHED_USER_ID_EXTRA = "oplus.intent.extra.cached_userId"
+
+        /** 气泡点击到系统真正开始启动之间的最大间隔。 */
+        const val BUBBLE_OPEN_WINDOW_MS = 2_500L
+
         const val TAG = "Free"
         const val ACTIVITY_STARTER_CLASS = "com.android.server.wm.ActivityStarter"
 

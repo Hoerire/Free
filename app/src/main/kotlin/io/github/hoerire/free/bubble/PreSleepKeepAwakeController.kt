@@ -128,11 +128,11 @@ internal class PreSleepKeepAwakeController(
     }
 
     /**
-     * 变暗要连续保持 [DIM_CONFIRM_MS] 才给建议。
+     * 变暗只需连续保持 [DIM_CONFIRM_MS]（一个轮询周期）就弹，不做 1.5 秒级等待。
      *
-     * 播放视频时系统会反复把用户活动汇总瞬时置成 DIMMED 再回到明亮（实测单次 0.04~0.6 秒，
-     * 几秒里反复好几次），那并不是即将休眠；连续变暗才算成立。
-     * 成立之后就弹气泡，停留时间完全交给「气泡停留」设置，模块不主动撤。
+     * 播放视频时系统会把用户活动汇总瞬时置成 DIMMED 再回到明亮，那种抖动只持续几十毫秒，
+     * 等不到下一个轮询周期就会消失；真正开始变暗则会持续下去。这样既不会误判，
+     * 又能在屏幕刚一开始变暗时就把气泡放出来。
      */
     private fun maybeSuggest() {
         val now = SystemClock.elapsedRealtime()
@@ -346,7 +346,7 @@ internal class PreSleepKeepAwakeController(
          * 视频播放期间系统会反复短暂进入 DIMMED（实测 0.04~0.6 秒一次，几秒里好几回），
          * 那是播放器的常亮与系统超时在打架，不是"马上要息屏"；真正的变暗会一直持续到息屏。
          */
-        const val DIM_CONFIRM_MS = 1_500L
+        const val DIM_CONFIRM_MS = 250L
 
         const val KEEP_WINDOW_TITLE = "FreeKeepScreenOn"
         const val KEEP_LOCK_TAG = "Free:KeepScreenOn"
