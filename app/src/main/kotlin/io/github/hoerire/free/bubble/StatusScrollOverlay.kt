@@ -4,10 +4,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffColorFilter
 import android.graphics.Rect
-import android.graphics.drawable.Drawable
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -20,7 +17,6 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.PathInterpolator
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import java.util.Locale
@@ -32,7 +28,6 @@ import java.util.Locale
  */
 internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
     private val handler = Handler(Looper.getMainLooper())
-    private val iconView = ImageView(context)
     private val ticker: FadingTickerView = FadingTickerView(context)
     private var attached = false
     private var hasText = false
@@ -41,7 +36,6 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
     private var clockView: TextView? = null
     private var clockOriginalVisibility = -1
     private var clockSuppressed = false
-    private var pendingIcon: Drawable? = null
     private var pendingText: String? = null
     private var hasPending = false
     private val hiddenPeers = ArrayList<View>()
@@ -64,15 +58,14 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         orientation = LinearLayout.HORIZONTAL
         setGravity(Gravity.CENTER_VERTICAL)
         val pad = dp(5f)
-        setPadding(pad, 0, pad, 0)
+        // 起点对齐时钟左沿：左侧不留内边距，文字只靠 ticker 自己的 2dp 留白。
+        setPadding(0, 0, pad, 0)
         setClipToPadding(true)
         setClipChildren(false)
         setBackgroundColor(Color.TRANSPARENT)
         visibility = View.VISIBLE
         alpha = 0f
 
-        iconView.setScaleType(ImageView.ScaleType.CENTER_INSIDE)
-        addView(iconView, LinearLayout.LayoutParams(dp(16f), dp(16f)))
 
         ticker.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
         ticker.setSingleLine(true)
@@ -80,7 +73,7 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         ticker.setEllipsize(TextUtils.TruncateAt.END)
         ticker.isFocusable = false
         ticker.setIncludeFontPadding(false)
-        ticker.setPadding(dp(6f), 0, dp(4f), 0)
+        ticker.setPadding(dp(2f), 0, dp(4f), 0)
         // 文本用 WRAP_CONTENT 而非权重(0,MATCH,1)，避免在 WRAP_CONTENT 容器里塌缩成 0 宽；
         // 整体也按内容自适应宽度，随状态栏布局自动测量。
         // ViewOverlay 手工测量/布局时不一定会解析 LinearLayout 的权重，
@@ -121,13 +114,13 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         var left = clockOffsetInHost(false)
         val height = tickerRowHeight()
         val top = centeredTopInHost(height)
-        var right = findRightSystemBoundary(parent)
+        var right = tickerRightBoundary(parent)
         val tickerBounds = resolveFluidCloudAvoidance(parent, left, right, top, height)
         left = tickerBounds[0]
         right = tickerBounds[1]
         val availableWidth = Math.max(1, right - left)
-        val width = if (availableWidth >= dp(144f)) availableWidth - dp(24f) else availableWidth
-        val textWidth = Math.max(1, width - paddingLeft - paddingRight - dp(16f))
+        val width = availableWidth
+        val textWidth = Math.max(1, width - paddingLeft - paddingRight)
         val tickerParams = ticker.layoutParams as LinearLayout.LayoutParams
         tickerParams.width = textWidth
         tickerParams.height = LinearLayout.LayoutParams.MATCH_PARENT
@@ -143,12 +136,10 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         visibility = View.VISIBLE
         if (!hasText) alpha = 0f
         if (hasPending) {
-            val icon = pendingIcon
             val text = pendingText ?: ""
             hasPending = false
-            pendingIcon = null
             pendingText = null
-            show(icon, text)
+            show(text)
         }
         // SystemUI 可能晚一帧才量完状态栏宿主：
         // 那时再布局一次，让文本区用上真实宿主边界。
@@ -198,13 +189,13 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         var left = clockOffsetInHost(false)
         val height = tickerRowHeight()
         val top = centeredTopInHost(height)
-        var right = findRightSystemBoundary(currentHost)
+        var right = tickerRightBoundary(currentHost)
         val tickerBounds = resolveFluidCloudAvoidance(currentHost, left, right, top, height)
         left = tickerBounds[0]
         right = tickerBounds[1]
         val availableWidth = Math.max(1, right - left)
-        val width = if (availableWidth >= dp(144f)) availableWidth - dp(24f) else availableWidth
-        val textWidth = Math.max(1, width - paddingLeft - paddingRight - dp(16f))
+        val width = availableWidth
+        val textWidth = Math.max(1, width - paddingLeft - paddingRight)
         val tickerParams = ticker.layoutParams as LinearLayout.LayoutParams
         tickerParams.width = textWidth
         tickerParams.height = LinearLayout.LayoutParams.MATCH_PARENT
@@ -462,6 +453,47 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
     }
 
     /**
+     * 滚动条的右界：有摄像头挖孔时以挖孔左沿为准（不超过摄像头），没有挖孔才用系统图标区左沿。
+     *
+     * 只取系统图标区左沿时，ColorOS 17 上那个容器带了一大段左侧留白，
+     * 结果滚动条在中段就断掉、右边空着一大块。
+     */
+    private fun tickerRightBoundary(parent: ViewGroup): Int {
+        val camera = cameraLeftInHost(parent)
+        val system = findRightSystemBoundary(parent)
+        ModuleLog.debug("BubbleNotify") {
+            "STATUS_TICKER_BOUNDS_left" + clockOffsetInHost(false) +
+                "_camera" + (camera ?: -1) +
+                "_system" + system +
+                "_parent" + parent.measuredWidth
+        }
+        // 有摄像头就顶到挖孔左沿（只留 2dp 余量）；没有摄像头才用系统图标区左沿，
+        // 那里自带一段留白，多让 24dp。
+        return if (camera != null) Math.max(0, camera - dp(2f))
+        else Math.max(0, system - dp(24f))
+    }
+
+    /** 摄像头挖孔左沿（宿主坐标）；没有挖孔或取不到返回 null。 */
+    private fun cameraLeftInHost(parent: ViewGroup): Int? {
+        val cutout =
+            runCatching { rootWindowInsets?.displayCutout }.getOrNull() ?: return null
+        val rects = cutout.boundingRects
+        if (rects.isEmpty()) return null
+        val hostLocation = IntArray(2)
+        runCatching { parent.getLocationOnScreen(hostLocation) }.getOrNull() ?: return null
+        var result = Int.MAX_VALUE
+        for (rect in rects) {
+            if (rect == null || rect.isEmpty) continue
+            // boundingRects 用的是窗口坐标；状态栏窗口贴着屏幕左上角，换算到宿主本地坐标即可。
+            val inHost = rect.left - hostLocation[0]
+            if (inHost in 1 until Math.max(1, parent.measuredWidth)) {
+                result = Math.min(result, inHost)
+            }
+        }
+        return if (result == Int.MAX_VALUE) null else result
+    }
+
+    /**
      * 让滚动条落在状态栏里没有被可见流体云胶囊占据的那一段。
      * 某些版本里胶囊是独立的 SystemUI 窗口，所以先在屏幕坐标里算出来，
      * 再换回浮层宿主的本地坐标系。
@@ -634,24 +666,11 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         }
         if (Color.alpha(color) == 0) color = statusForeground()
         ticker.setTextColor(color)
-        val iconDrawable = iconView.drawable
-        if (iconView.visibility != View.GONE && iconDrawable != null) {
-            // 与状态栏图标的黑白单色观感保持一致。
-            iconDrawable.mutate().setColorFilter(
-                PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN),
-            )
-            iconView.invalidate()
-        }
     }
 
-    fun show(icon: Drawable?, text: String) {
-        show(icon, text, 1)
-    }
-
-    fun show(icon: Drawable?, text: String, rounds: Int) {
+    fun show(text: String, rounds: Int = 1) {
         val currentHost = host
         if (currentHost == null) {
-            pendingIcon = icon
             pendingText = text
             hasPending = true
             return
@@ -665,7 +684,6 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         displayRounds = Math.max(1, Math.min(5, rounds))
         completedRounds = 0
         hideStatusBarPeers(currentHost)
-        setStatusIcon(icon)
         copyClockStyle()
         val next = text
         fullText = next
@@ -678,11 +696,7 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
             pageIndex = 0
             ticker.translationY = distance.toFloat()
             ticker.alpha = 0f
-            iconView.translationY = distance.toFloat()
-            iconView.alpha = 0f
             ticker.animate().translationY(0f).alpha(1f).setDuration(190L)
-                .setInterpolator(SCROLL_ENTER_INTERPOLATOR).start()
-            iconView.animate().translationY(0f).alpha(1f).setDuration(190L)
                 .setInterpolator(SCROLL_ENTER_INTERPOLATOR).start()
         } else {
             ticker.animate().translationY(-distance.toFloat()).alpha(0f).setDuration(150L)
@@ -704,12 +718,6 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         scheduleOverlayKeepAlive()
     }
 
-    fun updateIcon(icon: Drawable?) {
-        if (!hasText || icon == null) return
-        setStatusIcon(icon)
-        copyClockStyle()
-    }
-
     fun setFinishedAction(action: (() -> Unit)?) {
         finishedAction = action
     }
@@ -721,22 +729,6 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
     fun finishCurrentRoundSoon() {
         if (!hasText) return
         displayRounds = Math.min(displayRounds, completedRounds + 1)
-    }
-
-    private fun setStatusIcon(icon: Drawable?) {
-        if (icon == null) {
-            iconView.visibility = View.GONE
-            return
-        }
-        iconView.visibility = View.VISIBLE
-        setImageDrawable(icon)
-        copyClockStyle()
-    }
-
-    private fun setImageDrawable(icon: Drawable) {
-        val state = icon.constantState
-        val copy = if (state == null) icon else state.newDrawable()
-        iconView.setImageDrawable(copy.mutate())
     }
 
     fun removeImmediately() {
@@ -766,8 +758,6 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         textPages.clear()
         fullText = ""
         pageIndex = 0
-        iconView.setImageDrawable(null)
-        iconView.visibility = View.GONE
         shownAt = 0L
         // 保持透明宿主挂载：否则 ColorOS 会重建左侧状态栏分组，
         // 让时钟与图标的显隐和这里抢时序。

@@ -302,8 +302,9 @@ private fun BubbleOverview(
                             stringResource(R.string.bubble_status_scroll_summary_off)
                         },
                     onClick = { onNavigate(BubblePage.StatusScroll) },
-                    enabled = bubbleEditable,
-                    startAction = { PreferenceIcon(Icons.Rounded.SwipeRight, bubbleEditable) },
+                    // 状态栏滚动是独立功能：气泡总闸关掉也照样能进这一页。
+                    enabled = masterEditable,
+                    startAction = { PreferenceIcon(Icons.Rounded.SwipeRight, masterEditable) },
                 )
                 ArrowPreference(
                     title = stringResource(R.string.bubble_group_suggestions),
@@ -764,7 +765,8 @@ private fun BubbleStatusScrollPage(
     onSettingsChange: (transform: BubbleSettingsTransform) -> Unit,
 ) {
     val settings = state.settings
-    val bubbleEditable = state.settingsEditable && settings.enabled && settings.bubbleEnabled
+    // 状态栏滚动是独立功能：只受模块总开关约束，气泡总闸关掉也能单独启用。
+    val statusEditable = state.settingsEditable && settings.enabled
     SettingsPage(title = stringResource(R.string.bubble_group_status_scroll), onBack = onBack) {
         item(key = "status_scroll") {
             SettingsGroup(modifier = Modifier.fillMaxWidth()) {
@@ -775,14 +777,14 @@ private fun BubbleStatusScrollPage(
                     },
                     title = stringResource(R.string.bubble_status_scroll_enabled_title),
                     summary = stringResource(R.string.bubble_status_scroll_enabled_summary),
-                    enabled = bubbleEditable,
-                    startAction = { PreferenceIcon(Icons.Rounded.Notifications, bubbleEditable) },
+                    enabled = statusEditable,
+                    startAction = { PreferenceIcon(Icons.Rounded.Notifications, statusEditable) },
                 )
                 RemoteDpSliderPreference(
                     icon = Icons.Rounded.Layers,
                     confirmedValue = settings.statusScrollRounds,
                     isUpdating = state.isUpdating,
-                    enabled = bubbleEditable && settings.statusScrollEnabled,
+                    enabled = statusEditable && settings.statusScrollEnabled,
                     title = stringResource(R.string.bubble_status_scroll_rounds_title),
                     summary = stringResource(R.string.bubble_status_scroll_rounds_summary),
                     minDp = ModulePreferences.MIN_STATUS_SCROLL_ROUNDS,

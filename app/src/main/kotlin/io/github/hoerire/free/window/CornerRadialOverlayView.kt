@@ -1801,6 +1801,7 @@ internal class CornerRadialOverlayView(
         const val PANEL_CONTENT_DELAY_MILLIS = 45
         const val PANEL_CONTENT_FADE_MILLIS = 180
         const val PANEL_CONTENT_TRANSLATION_FRACTION = 0.12f
+
         const val TICK_INTERVAL_MS = 80L
         const val GESTURE_TIMEOUT_MS = 5_000L
 

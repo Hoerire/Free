@@ -121,6 +121,7 @@ internal fun FreeNavHost(
     onFloatKeepAliveChange: (Boolean) -> Unit,
     onFloatHandleMaxCountChange: (Int) -> Unit,
     onLongPressMuteChange: (Boolean) -> Unit,
+    onPredictiveBackActionChange: (Int) -> Unit,
     onZoomExcludedChange: (List<String>) -> Unit,
     onRadialInteractionEnabledChange: (Boolean) -> Unit,
     onRadialKeepOpenChange: (Boolean) -> Unit,
@@ -280,6 +281,7 @@ internal fun FreeNavHost(
                     onBack = popBackStack,
                     onHandleSwipeUpToMiniEnabledChange = onHandleSwipeUpToMiniEnabledChange,
                     onLongPressMuteChange = onLongPressMuteChange,
+                    onPredictiveBackActionChange = onPredictiveBackActionChange,
                     onOutsideTapCloseModeChange = onOutsideTapCloseModeChange,
                 )
             AppRoute.ZoomEdgeFloat ->

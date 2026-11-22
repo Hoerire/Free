@@ -319,6 +319,12 @@ internal fun <T> ListChoicePreference(
      * 只是多一行灰字，这类场景传 false。
      */
     showSummary: Boolean = true,
+    /**
+     * 标题下的一行说明文字；传了就不再显示选中项（右侧值区本来就有）。
+     *
+     * 用于"这一行到底是干什么的"需要展开解释的场景，例如手势类选项。
+     */
+    description: String? = null,
     /** 保留参数：COUI 版列表不再画行间分割线，值被忽略。 */
     @Suppress("UNUSED_PARAMETER") showTopSeparator: Boolean = false,
 ) {
@@ -331,7 +337,7 @@ internal fun <T> ListChoicePreference(
             values.getOrNull(index)?.let(onSelected)
         },
         title = title,
-        summary = if (showSummary) labels.getOrNull(selectedIndex) else null,
+        summary = description ?: if (showSummary) labels.getOrNull(selectedIndex) else null,
         startAction = icon,
         cancelButtonText = stringResource(R.string.cancel),
         enabled = enabled,

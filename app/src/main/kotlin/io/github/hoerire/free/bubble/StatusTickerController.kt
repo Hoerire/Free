@@ -1,14 +1,11 @@
 package io.github.hoerire.free.bubble
 
 import android.content.Context
-import android.graphics.drawable.AdaptiveIconDrawable
-import android.graphics.drawable.Drawable
 import android.os.Handler
 import android.os.Looper
 import android.service.notification.StatusBarNotification
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageView
 import android.widget.TextView
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
@@ -17,8 +14,8 @@ import java.lang.reflect.Method
 /**
  * 状态栏滚动：把最新通知的「应用·标题 正文」塞进状态栏时钟的位置滚动一遍。
  *
- * 与气泡共用同一条通知管线，但**不共用白名单**：状态栏滚动默认对全部应用生效
- *（可在设置里收窄），这样即使某个应用没开气泡，也能只看状态栏摘要。
+ * 与气泡共用同一条通知管线，但**不共用白名单**：状态栏滚动默认对全部应用生效，
+ * 这样即使某个应用没开气泡，也能只看状态栏摘要。不显示图标：文字本身以应用名开头。
  *
  * 视图本体是 [StatusScrollOverlay]（逐行转写），这里只负责：
  * 找到状态栏容器、装钩子、把通知内容整理成一行、结束后轮下一条。
@@ -57,24 +54,22 @@ internal class StatusTickerController(
     fun onPosted(sbn: StatusBarNotification, payload: BubblePayload) {
         val config = settings()
         if (!config.statusScrollActive) return
-        if (!config.acceptsStatusScroll(BubbleIdentity(sbn.packageName, sbn.userId))) return
         val text = buildText(payload)
         if (text.isBlank()) return
-        val icon = runCatching { tickerIcon(sbn) }.getOrNull()
         // 同一条通知的更新不打断；正在滚另一条时排队，让当前这一轮先走完。
         if (overlay?.isShowing() == true) {
             if (sbn.key != null && sbn.key == tickingKey) return
-            pending = PendingTicker(sbn.key, icon, text, config.statusScrollRounds)
+            pending = PendingTicker(sbn.key, text, config.statusScrollRounds)
             runCatching { overlay?.finishCurrentRoundSoon() }
             return
         }
         val target = root
         if (target == null) {
-            pending = PendingTicker(sbn.key, icon, text, config.statusScrollRounds)
+            pending = PendingTicker(sbn.key, text, config.statusScrollRounds)
             ensureScanner()
             return
         }
-        show(target, sbn.key, icon, text, config.statusScrollRounds)
+        show(target, sbn.key, text, config.statusScrollRounds)
     }
 
     /** 设置关闭/模块关闭时立刻收回，正显示的那条也一起停。 */
@@ -114,7 +109,6 @@ internal class StatusTickerController(
     private fun show(
         host: ViewGroup,
         key: String?,
-        icon: Drawable?,
         text: String,
         rounds: Int,
     ) {
@@ -124,7 +118,9 @@ internal class StatusTickerController(
         }
         runCatching { view.attachTo(host) }
             .onFailure { logger("STATUS_TICKER_ATTACH_FAILED", it) }
-        runCatching { view.show(icon, text, rounds) }
+        // 不再显示图标：QQ 这类应用给的是满幅图片，染色后就是一块实心方块；
+        // 文字本身已经以应用名开头（见 buildText），图标去掉反而更稳定。
+        runCatching { view.show(text, rounds) }
             .onFailure { logger("STATUS_TICKER_SHOW_FAILED", it) }
         tickingKey = key
     }
@@ -134,7 +130,7 @@ internal class StatusTickerController(
         val next = pending ?: return
         pending = null
         val host = root ?: return
-        show(host, next.key, next.icon, next.text, next.rounds)
+        show(host, next.key, next.text, next.rounds)
     }
 
     private fun buildText(payload: BubblePayload): String =
@@ -159,7 +155,7 @@ internal class StatusTickerController(
         val pendingNow = pending
         if (pendingNow != null) {
             pending = null
-            show(host, pendingNow.key, pendingNow.icon, pendingNow.text, pendingNow.rounds)
+            show(host, pendingNow.key, pendingNow.text, pendingNow.rounds)
         } else {
             runCatching { overlay?.attachTo(host) }
         }
@@ -245,65 +241,6 @@ internal class StatusTickerController(
 
     private fun dp(value: Float): Int =
         Math.round(value * context.resources.displayMetrics.density)
-
-    // ---- 图标 -----------------------------------------------------------------
-
-    private fun tickerIcon(sbn: StatusBarNotification): Drawable? {
-        val fromStatusBar = runCatching {
-            findStatusBarIconDrawable(root, sbn.key, 0)
-        }.getOrNull()
-        if (fromStatusBar != null) return monochrome(fromStatusBar)
-        val notification = sbn.notification ?: return null
-        val packageContext =
-            runCatching { context.createPackageContext(sbn.packageName, 0) }.getOrNull()
-                ?: context
-        val icon =
-            runCatching { notification.getSmallIcon()?.loadDrawable(packageContext) }.getOrNull()
-                ?: return null
-        return monochrome(icon)
-    }
-
-    /** 从状态栏自己的 StatusBarIconView 取已经染好色的单色图标（含通知图标增强的改写）。 */
-    private fun findStatusBarIconDrawable(view: View?, key: String?, depth: Int): Drawable? {
-        if (view == null || key == null || depth > 12) return null
-        if (view is ImageView &&
-            view.javaClass.name.contains("StatusBarIconView") &&
-            statusBarNotificationOf(view)?.key == key
-        ) {
-            return view.drawable
-        }
-        if (view is ViewGroup) {
-            for (index in 0 until view.childCount) {
-                findStatusBarIconDrawable(view.getChildAt(index), key, depth + 1)?.let {
-                    return it
-                }
-            }
-        }
-        return null
-    }
-
-    private fun statusBarNotificationOf(view: View): StatusBarNotification? {
-        var type: Class<*>? = view.javaClass
-        while (type != null && type != View::class.java) {
-            runCatching {
-                val method = type.getDeclaredMethod("getNotification")
-                method.isAccessible = true
-                return method.invoke(view) as? StatusBarNotification
-            }
-            type = type.superclass
-        }
-        return null
-    }
-
-    private fun monochrome(drawable: Drawable): Drawable {
-        if (drawable !is AdaptiveIconDrawable) return drawable
-        return runCatching {
-            val monochrome = drawable.monochrome
-            val foreground = drawable.foreground
-            val chosen = monochrome ?: foreground ?: return drawable
-            chosen.constantState?.newDrawable()?.mutate() ?: chosen
-        }.getOrElse { drawable }
-    }
 
     // ---- 钩子 -----------------------------------------------------------------
 
@@ -400,7 +337,6 @@ internal class StatusTickerController(
 
     private data class PendingTicker(
         val key: String?,
-        val icon: Drawable?,
         val text: String,
         val rounds: Int,
     )
@@ -408,7 +344,6 @@ internal class StatusTickerController(
     private companion object {
         const val SCAN_INTERVAL_MS = 500L
         const val MAX_SCAN_ATTEMPTS = 60
-
         val FRAGMENT_CLASSES =
             listOf(
                 "com.android.systemui.statusbar.phone.fragment.CollapsedStatusBarFragment",

@@ -31,7 +31,7 @@ internal data class BubbleSettings(
     val previewWidthDp: Int = 280,
     val previewOverlayAlpha: Int = 18,
     val previewPosition: Int = BubbleMetrics.CONTENT_AUTO,
-    /** 模块总开关 ×「状态栏滚动」；与气泡白名单无关。 */
+    /** 原始开关；是否生效看 [statusScrollActive]（模块总开关）。 */
     val statusScrollEnabled: Boolean = ModulePreferences.DEFAULT_STATUS_SCROLL_ENABLED,
     val statusScrollActive: Boolean = false,
     val statusScrollRounds: Int = ModulePreferences.DEFAULT_STATUS_SCROLL_ROUNDS,
@@ -48,15 +48,6 @@ internal data class BubbleSettings(
     val suggestionNoEdge: Boolean = false,
 ) {
     val previewActive: Boolean get() = active && previewEnabled
-
-    /** 状态栏滚动与气泡共用「应用范围」里的同一份名单（主应用与分身各看各的键）。 */
-    fun acceptsStatusScroll(identity: BubbleIdentity): Boolean {
-        if (!statusScrollActive) return false
-        if (identity.userId > 0) {
-            return cloneWhitelist.contains(BubbleKey.key(identity.packageName, identity.userId))
-        }
-        return whitelist.contains(identity.packageName)
-    }
 
     /** 某类即时建议是否开启；type 取自 [ImmediateSuggestionController.TYPE_FLASHLIGHT] 等常量。 */
     fun isSuggestionEnabled(type: String): Boolean {

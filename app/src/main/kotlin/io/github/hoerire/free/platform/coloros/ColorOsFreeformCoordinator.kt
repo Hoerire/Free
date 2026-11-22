@@ -161,6 +161,44 @@ internal class ColorOsFreeformCoordinator(
             }
         }
 
+    /**
+     * 返回增强：SystemUI 在边缘内滑停住 0.5 秒后触发两个动作之一。
+     *
+     * - [ModulePreferences.ACTION_PREDICTIVE_BACK_HOLD]：焦点应用在「全屏 ↔ 小窗」之间切换；
+     * - [ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL]：打开「更多」面板。
+     *
+     * 判定与广播都在 SystemUI 侧，本进程只认可信发起方（SystemUI / 系统 / 模块自身）。
+     */
+    private val predictiveBackReceiver =
+        object : BroadcastReceiver() {
+            override fun onReceive(receiverContext: Context?, intent: Intent?) {
+                val action = intent?.action ?: return
+                if (action != ModulePreferences.ACTION_PREDICTIVE_BACK_HOLD &&
+                    action != ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL
+                ) {
+                    return
+                }
+                if (!isPredictiveBackSender(sentFromUid)) {
+                    logger(Log.WARN, "SYSTEM_PREDICTIVE_BACK_FOREIGN_SENDER_" + sentFromUid, null)
+                    return
+                }
+                if (action == ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL) {
+                    val sideLeft =
+                        intent.getBooleanExtra(ModulePreferences.EXTRA_GESTURE_SIDE, true)
+                    val x = intent.getFloatExtra(ModulePreferences.EXTRA_GESTURE_X, 0f)
+                    val y = intent.getFloatExtra(ModulePreferences.EXTRA_GESTURE_Y, 0f)
+                    logger(Log.INFO, "SYSTEM_PREDICTIVE_BACK_PANEL_RECV", null)
+                    handler.post { openMorePanelFromGesture(sideLeft, x, y) }
+                } else {
+                    logger(Log.INFO, "SYSTEM_PREDICTIVE_BACK_RECV", null)
+                    handler.post { toggleFocusedWindowForm() }
+                }
+            }
+        }
+
+    @Volatile
+    private var systemUiUid = -2
+
     @Volatile
     private var catalogSnapshot = AppCatalogSnapshot()
     private var pointerListener: Any? = null
@@ -233,6 +271,7 @@ internal class ColorOsFreeformCoordinator(
             environmentState.observe { applySettings(configuration.snapshot) }
             registerPackageObserver()
             registerPinnedTargetsObserver()
+            registerPredictiveBackObserver()
             configuration.observe {
                 handler.post { applySettings(configuration.snapshot) }
             }
@@ -2006,9 +2045,129 @@ internal class ColorOsFreeformCoordinator(
     private fun flexibleWindowService(): Any? =
         OemReflection.readField(controller, "mFlexibleWindowManagerService")
 
+    /** 返回增强的触发通道：SystemUI 在边缘内滑触发动作时发来广播。 */
+    private fun registerPredictiveBackObserver() {
+        try {
+            context.registerReceiver(
+                predictiveBackReceiver,
+                android.content.IntentFilter().apply {
+                    addAction(ModulePreferences.ACTION_PREDICTIVE_BACK_HOLD)
+                    addAction(ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL)
+                },
+                Context.RECEIVER_EXPORTED,
+            )
+            debug("SYSTEM_PREDICTIVE_BACK_OBSERVER_READY")
+        } catch (exception: RuntimeException) {
+            logger(Log.WARN, "SYSTEM_PREDICTIVE_BACK_OBSERVER_UNAVAILABLE", exception)
+        }
+    }
+
+    /**
+     * 内滑下拉：打开「更多」面板。
+     *
+     * 复用扇形菜单点「更多」的整条链路（原生面板 + 模块遮罩 + 内建面板兜底）：
+     * 先按起手那一侧把浮层建出来（面板接口与遮罩都挂在它上面），再走 [onMorePanelRequested]。
+     * 浮层创建时会带上扇形入场动画，这里立刻切成「只留遮罩」的面板态，视觉上不会闪出扇形。
+     */
+    internal fun openMorePanelFromGesture(sideLeft: Boolean, x: Float, y: Float) {
+        if (!lastSettings.enabled) return
+        if (!isGestureEnvironmentAllowed()) {
+            debug("SYSTEM_PREDICTIVE_BACK_PANEL_ENV_BLOCKED")
+            return
+        }
+        debug("SYSTEM_PREDICTIVE_BACK_PANEL_OPEN_L" + sideLeft)
+        if (overlay == null) {
+            showOverlay(if (sideLeft) io.github.hoerire.free.gesture.CornerSide.Left
+            else io.github.hoerire.free.gesture.CornerSide.Right, x, y)
+        }
+        val view = overlay ?: return
+        view.retainBackdropForPanel()
+        onMorePanelRequested()
+    }
+
+    /**
+     * 在「全屏」与「小窗」之间切换焦点应用（返回增强触发）。
+     *
+     * 按窗口状态分流，与扇形菜单同一套判断：
+     *   - 全屏：`switchFocusedTaskToZoom` 就地变小窗，不重启 Activity；
+     *   - 焦点在普通小窗：`moveFocusedTaskToFullscreen` 变回全屏；
+     *   - 迷你窗 / 贴边浮标不在焦点上，不走这条（点一下会先变回小窗）；
+     *   - 其它（分屏等）：不动作。
+     *
+     * 触发时系统可能还在收返回手势的转场，这一帧切不动就稍后重试两次。
+     */
+    private fun toggleFocusedWindowForm(attempt: Int = 0) {
+        if (!lastSettings.enabled) return
+        val tasks = tasksOfFocusedDisplay() ?: return
+        val focused = tasks.firstOrNull { isTaskFocused(it) && isTaskVisible(it) } ?: return
+        val packageName = packageOfTask(focused) ?: return
+        if (findFocusedFullscreenTaskOf(tasks, packageName) != null) {
+            if (switchFocusedFullscreenToZoom(tasks, packageName)) {
+                logger(Log.INFO, "SYSTEM_PREDICTIVE_BACK_ZOOM_" + packageName, null)
+                return
+            }
+            logger(Log.WARN, "SYSTEM_PREDICTIVE_BACK_ZOOM_RETRY_" + attempt, null)
+            retryToggle(attempt)
+            return
+        }
+        if (isFlexibleScenario(focused)) {
+            if (switchFocusedTaskToFullscreen(focused)) {
+                logger(Log.INFO, "SYSTEM_PREDICTIVE_BACK_FULL_" + packageName, null)
+            } else {
+                logger(Log.WARN, "SYSTEM_PREDICTIVE_BACK_FULL_RETRY_" + attempt, null)
+                retryToggle(attempt)
+            }
+            return
+        }
+        debug("SYSTEM_PREDICTIVE_BACK_NOOP_" + packageName + "_zoom" + flexZoomStateOf(focused))
+    }
+
+    /** 切形态这一帧可能还卡在返回手势的转场里，稍后重试两次。 */
+    private fun retryToggle(attempt: Int) {
+        if (attempt >= PREDICTIVE_BACK_RETRY_MAX) return
+        handler.postDelayed({ toggleFocusedWindowForm(attempt + 1) }, PREDICTIVE_BACK_RETRY_DELAY_MS)
+    }
+
+    /** 浮动窗口 → 全屏：系统自己的入口 `moveFocusedTaskToFullscreen(Task)`。 */
+    private fun switchFocusedTaskToFullscreen(task: Any): Boolean =
+        try {
+            val service = flexibleWindowService() ?: return false
+            val method =
+                OemReflection.requireMethod(service.javaClass, "moveFocusedTaskToFullscreen", 1)
+            method.isAccessible = true
+            method.invoke(service, task)
+            true
+        } catch (_: NoSuchMethodException) {
+            false
+        } catch (_: ReflectiveOperationException) {
+            false
+        } catch (_: RuntimeException) {
+            false
+        }
+
+    /** 返回增强的发起方只认 SystemUI、系统进程与模块自身。 */
+    private fun isPredictiveBackSender(uid: Int): Boolean {
+        if (uid < 0) return false
+        if (uid == android.os.Process.SYSTEM_UID || uid == moduleUid()) return true
+        val cached = systemUiUid
+        if (cached != -2) return uid == cached
+        val resolved =
+            try {
+                context.packageManager
+                    .getApplicationInfo(
+                        "com.android.systemui",
+                        android.content.pm.PackageManager.ApplicationInfoFlags.of(0),
+                    )
+                    .uid
+            } catch (_: RuntimeException) {
+                -1
+            }
+        systemUiUid = resolved
+        return uid == resolved
+    }
+
     /**
      * 「前台全屏 → 小窗」就地切换：`FlexibleWindowManagerService#switchFocusedTaskToZoom(Task)`。
-     *
      * 与 [ColorOsFreeformLauncher] 走的 `OplusZoomWindowManager.startZoomWindow` 区别在于：
      * 后者是一次**启动**（ActivityStarter、新建任务、起始窗口、OPEN 转场，转场结束前不可
      * 交互，约数百毫秒）；前者只是把已经在前台的全屏任务改成小窗形态，同一个窗口和
@@ -2421,6 +2580,10 @@ internal class ColorOsFreeformCoordinator(
 
         /** 与 FloatHandleView.REASON_START_FREEFORM_ONSINGLE_TAPUP 一致。 */
         const val BALL_OPEN_REASON = "onSingleTapUp"
+
+        /** 返回增强触发后的形态切换重试：转场未结束时第一次可能切不动。 */
+        const val PREDICTIVE_BACK_RETRY_MAX = 2
+        const val PREDICTIVE_BACK_RETRY_DELAY_MS = 160L
 
         /** getFlexibleZoomState()：2 = 迷你窗，8 = ready（贴边悬挂）。 */
         const val MINI_ZOOM_STATE = ColorOsFlexibleWindowState.MINI

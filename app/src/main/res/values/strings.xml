@@ -150,6 +150,13 @@
     <string name="auto_close_window_summary">超过数量限制时直接关闭旧窗口，不收成浮标</string>
     <string name="mini_long_press_title">长按静音</string>
     <string name="mini_long_press_summary">长按迷你窗静音，再长按恢复</string>
+    <string name="predictive_back_title">返回增强</string>
+    <string name="predictive_back_action_disabled">关闭</string>
+    <string name="predictive_back_action_zoom">小窗</string>
+    <string name="predictive_back_action_panel">更多</string>
+    <string name="predictive_back_desc_off">边缘内滑仍是原厂返回，不做任何接管</string>
+    <string name="predictive_back_desc_zoom">边缘内滑后停住 0.5 秒：全屏变为小窗，小窗变回全屏</string>
+    <string name="predictive_back_desc_panel">边缘内滑后停住 0.5 秒：打开「更多」面板</string>
     <string name="float_keep_alive_title">贴边挂机</string>
     <string name="float_keep_alive_summary">收成贴边浮标后保持应用继续运行</string>
     <string name="zoom_group_edge_title">贴边浮标</string>
@@ -272,7 +279,7 @@
     <string name="bubble_preview_alpha_summary">35–100，越高越实心</string>
 
     <string name="bubble_status_scroll_enabled_title">滚动显示通知</string>
-    <string name="bubble_status_scroll_enabled_summary">与应用范围共用名单：名单内的应用才滚；受「气泡通知」总闸控制</string>
+    <string name="bubble_status_scroll_enabled_summary">通知内容在状态栏时钟位置滚动显示</string>
     <string name="bubble_status_scroll_rounds_title">滚动轮数</string>
     <string name="bubble_status_scroll_rounds_summary">1–5 轮；文字过长时自动分页</string>
 
@@ -280,7 +287,7 @@
     <string name="bubble_group_appearance">气泡外观</string>
     <string name="bubble_group_timing">气泡停留</string>
     <string name="bubble_group_preview">内容浮层</string>
-    <string name="bubble_group_status_scroll">状态栏滚动</string>
+    <string name="bubble_group_status_scroll">滚动通知</string>
     <string name="bubble_group_suggestions">即时建议</string>
     <string name="bubble_apps_summary">应用 %1$d · 分身 %2$d</string>
     <string name="bubble_appearance_summary">大小 %1$d%% · 图标 %2$d%%</string>

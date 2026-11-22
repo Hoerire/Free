@@ -51,6 +51,16 @@ internal class SystemUiHookInstaller(
                             ModuleLog.warn("SYSTEMUI_BUBBLE_INSTALL_FAILED", it)
                         }
                         installSettingsObserver(context)
+                        // 返回增强：边缘内滑不松手超过 0.5 秒，当前应用原地变小窗。
+                        // 只在 ColorOS 17+ 接线（返回增强手势与本地小窗切换都是这一代才有）。
+                        if (RomFlavor.isColorOs17OrNewer) {
+                            runCatching {
+                                PredictiveBackHoldHook(module, configuration, context)
+                                    .install(classLoader)
+                            }.onFailure {
+                                ModuleLog.warn("SYSTEMUI_PREDICTIVE_BACK_INSTALL_FAILED", it)
+                            }
+                        }
                         // 角区抢流（SystemUI 侧 InputMonitor + pilferPointers）**只在 ColorOS 17+ 启用**。
                         //
                         // 这条通道在低版系统上会引起 SystemUI 崩溃循环；17 上角区抢流已改由

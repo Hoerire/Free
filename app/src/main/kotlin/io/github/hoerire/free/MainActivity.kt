@@ -94,6 +94,7 @@ class MainActivity : ComponentActivity() {
                     onFloatKeepAliveChange = repository::setFloatKeepAlive,
                     onFloatHandleMaxCountChange = repository::setFloatHandleMaxCount,
                     onLongPressMuteChange = repository::setLongPressMute,
+                    onPredictiveBackActionChange = repository::setPredictiveBackAction,
                     onRadialInteractionEnabledChange = repository::setRadialInteractionEnabled,
                     onRadialKeepOpenChange = repository::setRadialKeepOpen,
                     onSecondaryGroupSideChange = repository::setSecondaryGroupSide,

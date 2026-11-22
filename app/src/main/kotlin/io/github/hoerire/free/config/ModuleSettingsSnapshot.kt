@@ -75,6 +75,8 @@ internal data class ModuleSettingsSnapshot(
     val hideZoomInRecents: Boolean = ModulePreferences.DEFAULT_HIDE_ZOOM_IN_RECENTS,
     /** 长按迷你窗静音，再次长按恢复；普通小窗不响应。 */
     val longPressMuteEnabled: Boolean = ModulePreferences.DEFAULT_LONG_PRESS_MUTE,
+    /** 返回增强触发后的动作；[ModulePreferences.PREDICTIVE_BACK_ACTION_DISABLED] 为关闭。 */
+    val predictiveBackAction: Int = ModulePreferences.DEFAULT_PREDICTIVE_BACK_ACTION,
     /** 贴边挂机：收成贴边浮标后保持应用继续运行。 */
     val floatKeepAlive: Boolean = ModulePreferences.DEFAULT_FLOAT_KEEP_ALIVE,
     /** 扇形呼出后未选择任何条目时保持显示，不自动收起。 */
@@ -179,6 +181,11 @@ internal data class ModuleSettingsSnapshot(
     val floatKeepAliveEffective: Boolean get() = zoomInteractionActive && floatKeepAlive
     /** 长按迷你窗只跟模块总开关走。 */
     val longPressMuteEffective: Boolean get() = enabled && longPressMuteEnabled
+    /** 返回增强只跟模块总开关走：模块停用时等同关闭。 */
+    val predictiveBackActionEffective: Int
+        get() =
+            if (enabled) ModulePreferences.coercePredictiveBackAction(predictiveBackAction)
+            else ModulePreferences.PREDICTIVE_BACK_ACTION_DISABLED
     /** 快速上滑转迷你独立于启动场景开关，只跟模块总开关走。 */
     val handleSwipeUpToMiniEffective: Boolean get() = enabled && handleSwipeUpToMiniEnabled
 
@@ -194,8 +201,8 @@ internal data class ModuleSettingsSnapshot(
     /** 内容浮层是否生效：气泡生效 ×「内容浮层」。 */
     val bubblePreviewActive: Boolean get() = bubbleActive && bubblePreviewEnabled
 
-    /** 状态栏滚动跟随气泡总闸：总闸一关，它也跟着停。 */
-    val statusScrollActive: Boolean get() = bubbleActive && statusScrollEnabled
+    /** 状态栏滚动：独立开关，不看气泡通知与「应用范围」名单；只跟模块总开关走。 */
+    val statusScrollActive: Boolean get() = enabled && statusScrollEnabled
 
     /** 即时建议总闸：随气泡功能总闸。 */
     val suggestionsActive: Boolean get() = bubbleActive && suggestionsEnabled
@@ -285,6 +292,10 @@ internal data class ModuleSettingsSnapshot(
             .putBoolean(ModulePreferences.KEY_HIDE_ZOOM_IN_RECENTS, hideZoomInRecents)
             .putBoolean(ModulePreferences.KEY_FLOAT_KEEP_ALIVE, floatKeepAlive)
             .putBoolean(ModulePreferences.KEY_LONG_PRESS_MUTE, longPressMuteEnabled)
+            .putInt(
+                ModulePreferences.KEY_PREDICTIVE_BACK_ACTION,
+                ModulePreferences.coercePredictiveBackAction(predictiveBackAction),
+            )
             // 旧分项键不再写入，升级后一并清除，避免残留值干扰排查。
             .remove(ModulePreferences.LEGACY_KEY_ZOOM_INTERACTION_ENABLED)
             .putBoolean(ModulePreferences.KEY_RADIAL_INTERACTION_ENABLED, radialInteractionEnabled)
@@ -638,6 +649,12 @@ internal data class ModuleSettingsSnapshot(
                 longPressMuteEnabled = preferences.getBoolean(
                     ModulePreferences.KEY_LONG_PRESS_MUTE,
                     ModulePreferences.DEFAULT_LONG_PRESS_MUTE,
+                ),
+                predictiveBackAction = ModulePreferences.coercePredictiveBackAction(
+                    preferences.getInt(
+                        ModulePreferences.KEY_PREDICTIVE_BACK_ACTION,
+                        ModulePreferences.DEFAULT_PREDICTIVE_BACK_ACTION,
+                    ),
                 ),
                 radialKeepOpen = preferences.getBoolean(
                     ModulePreferences.KEY_RADIAL_KEEP_OPEN,

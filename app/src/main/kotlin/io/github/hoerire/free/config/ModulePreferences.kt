@@ -149,6 +149,41 @@ internal object ModulePreferences {
     const val KEY_LONG_PRESS_MUTE = "mini_long_press_v1"
     const val DEFAULT_LONG_PRESS_MUTE = false
 
+    /**
+     * 返回增强：屏幕边缘内滑开始返回手势后不松手，超过 0.5 秒执行所选动作。
+     * 松手才返回是系统原本的行为：0.5 秒内松手仍按原厂返回处理。
+     *
+     * 取值 [PREDICTIVE_BACK_ACTION_DISABLED] / [PREDICTIVE_BACK_ACTION_ZOOM] /
+     * [PREDICTIVE_BACK_ACTION_MORE_PANEL]；默认关闭，避免升级后行为突变。
+     */
+    const val KEY_PREDICTIVE_BACK_ACTION = "predictive_back_action_v1"
+    const val PREDICTIVE_BACK_ACTION_DISABLED = -1
+    const val PREDICTIVE_BACK_ACTION_ZOOM = 0
+    const val PREDICTIVE_BACK_ACTION_MORE_PANEL = 1
+    const val DEFAULT_PREDICTIVE_BACK_ACTION = PREDICTIVE_BACK_ACTION_DISABLED
+
+    fun coercePredictiveBackAction(value: Int): Int = value.coerceIn(-1, 1)
+
+    /**
+     * 返回增强保持多久后接管（毫秒）。
+     *
+     * 0.5 秒足够区分「快速滑一下返回」和「滑进来停住」，又不至于让用户觉得要等。
+     */
+    const val PREDICTIVE_BACK_HOLD_MS = 500L
+
+    /** 停住后原地变小窗：由 SystemUI 在松手前发出，system_server 收到后切换窗口形态。 */
+    const val ACTION_PREDICTIVE_BACK_HOLD =
+        "io.github.hoerire.free.action.PREDICTIVE_BACK_HOLD"
+
+    /** 停住后打开「更多」面板。 */
+    const val ACTION_PREDICTIVE_BACK_MORE_PANEL =
+        "io.github.hoerire.free.action.PREDICTIVE_BACK_MORE_PANEL"
+
+    /** 打开面板时起手的位置：从哪一侧起手、按下的坐标（像素）。 */
+    const val EXTRA_GESTURE_SIDE = "gesture_side_left"
+    const val EXTRA_GESTURE_X = "gesture_x"
+    const val EXTRA_GESTURE_Y = "gesture_y"
+
 
     /** 贴边挂机：收成贴边浮标后保持应用继续运行，不停止任务。 */
     const val KEY_FLOAT_KEEP_ALIVE = "float_keep_alive_v1"

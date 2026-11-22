@@ -222,6 +222,14 @@ internal class FrameworkConnectionRepository(private val context: Context) {
     fun setLongPressMute(enabled: Boolean) =
         updateSettings { it.copy(longPressMuteEnabled = enabled) }
 
+    /** 返回增强：边缘内滑不松手超过 0.5 秒后执行的动作（关闭 / 原地小窗 / 更多面板）。 */
+    fun setPredictiveBackAction(action: Int) =
+        updateSettings {
+            it.copy(
+                predictiveBackAction = ModulePreferences.coercePredictiveBackAction(action),
+            )
+        }
+
 
     fun setFloatHandleMaxCount(count: Int) =
         updateSettings {

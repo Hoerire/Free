@@ -158,15 +158,16 @@ internal class BubbleCoordinator(
 
     override fun onPosted(sbn: StatusBarNotification) {
         runCatching {
-            if (!settings.active) return
+            // 气泡关掉、只剩状态栏滚动时也要继续收通知。
+            if (!settings.active && !settings.statusScrollActive) return
             val packageName = sbn.packageName ?: return
             if (isIgnoredPackage(packageName)) return
             val notification = sbn.notification ?: return
             if (!isBubbleEligible(notification)) return
             val identity = BubbleIdentity(packageName, sbn.userId, sbn.key)
-            val wantsBubble = settings.accepts(identity)
-            val wantsTicker =
-                settings.statusScrollActive && settings.acceptsStatusScroll(identity)
+            val wantsBubble = settings.active && settings.accepts(identity)
+            // 状态栏滚动是独立开关：所有应用都滚，不再受「应用范围」名单限制。
+            val wantsTicker = settings.statusScrollActive
             if (!wantsBubble && !wantsTicker) return
             environment.suppressionReason(packageName, sbn.userId, settings)?.let { reason ->
                 log("BUBBLE_SKIP_" + reason + "_" + packageName, null)
@@ -174,7 +175,6 @@ internal class BubbleCoordinator(
             }
             if (wantsBubble && isDuplicate(sbn.key)) return
             val payload = payloads.build(sbn)
-            // 状态栏滚动与气泡共用「应用范围」的名单（开关仍各自独立）。
             if (wantsTicker) statusTicker?.onPosted(sbn, payload)
             if (!wantsBubble) return
             val item = BubbleItem(identity, payload, notification.contentIntent)
