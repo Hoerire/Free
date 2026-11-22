@@ -214,6 +214,10 @@ internal class FrameworkConnectionRepository(private val context: Context) {
     fun setAutoCloseWindow(enabled: Boolean) =
         updateSettings { it.copy(autoCloseWindow = enabled) }
 
+    /** 最近任务里隐藏小窗：开启后小窗任务不再出现在最近任务卡片里。 */
+    fun setHideZoomInRecents(enabled: Boolean) =
+        updateSettings { it.copy(hideZoomInRecents = enabled) }
+
     /** 长按迷你窗静音/恢复。 */
     fun setLongPressMute(enabled: Boolean) =
         updateSettings { it.copy(longPressMuteEnabled = enabled) }

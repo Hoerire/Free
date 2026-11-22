@@ -84,6 +84,7 @@ class MainActivity : ComponentActivity() {
                     onDragLongPressChange = repository::setDragLongPressMs,
                     onZoomMaxWindowCountChange = repository::setZoomMaxWindowCount,
                     onZoomAllowAnyAppChange = repository::setZoomAllowAnyApp,
+                    onHideZoomInRecentsChange = repository::setHideZoomInRecents,
                     onZoomLaunchNoticeChange = repository::setZoomLaunchNotice,
                     onZoomLaunchHeadsUpChange = repository::setZoomLaunchHeadsUp,
                     onZoomLaunchControlCenterChange = repository::setZoomLaunchControlCenter,

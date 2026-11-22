@@ -14,9 +14,7 @@ import io.github.libxposed.api.XposedModule
 import io.github.hoerire.free.log.ModuleLog
 import io.github.hoerire.free.platform.coloros.ColorOsAllAppsContent
 import io.github.hoerire.free.platform.coloros.ColorOsAllAppsEndpoint
-import io.github.hoerire.free.platform.coloros.ColorOsSidebarEntryEndpoint
 import io.github.hoerire.free.platform.coloros.ColorOsSidebarTarget
-import io.github.hoerire.free.platform.coloros.SidebarEntryProtocol
 import io.github.hoerire.free.platform.coloros.ColorOsSidebarVisualTarget
 import java.io.File
 import java.io.IOException
@@ -25,7 +23,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /** 只注入侧边栏 UI 进程；服务方法照常执行一次，应用/工具的启动仍交给原厂路由。 */
 internal class SidebarHookInstaller(private val module: XposedModule, private val configuration: ProcessConfiguration) {
-    private var entryEndpoint: ColorOsSidebarEntryEndpoint? = null
     private var endpoint: ColorOsAllAppsEndpoint? = null
     private val settingsSyncInstalled = AtomicBoolean(false)
 
@@ -132,17 +129,13 @@ internal class SidebarHookInstaller(private val module: XposedModule, private va
                     // 第一次被本模块的 action 绑定时补齐设置通道：install() 时
                     // ActivityThread.currentApplication() 常为 null，拿不到 Context。
                     if (service != null &&
-                        (
-                            intent?.action == ColorOsSidebarTarget.BIND_ACTION ||
-                                intent?.action == SidebarEntryProtocol.BIND_ACTION
-                        ) &&
+                        intent?.action == ColorOsSidebarTarget.BIND_ACTION &&
                         settingsSyncInstalled.compareAndSet(false, true)
                     ) {
                         installSettingsSync(service)
                     }
-                    // 两个 action 各管一条链：BIND_ACTION 是「更多」面板的原生桥，
-                    // BIND_ENTRIES_V1 是目录读取。都**不再看总开关**：请求本身由各自的
-                    // allowed() 逐项判定，而侧边栏进程里的总开关可能还停在重装后的旧快照上。
+                    // 只保留「更多」面板的原生桥。目录读取已经改成各进程自己直读侧边栏 APK，
+                    // 不再需要向侧边栏进程要数据，也没有任何跨进程通道。
                     if (service != null && intent?.action == ColorOsSidebarTarget.BIND_ACTION) {
                         if (endpoint == null) {
                             val targetUid = ColorOsSidebarTarget.supportedUid(service)
@@ -158,22 +151,6 @@ internal class SidebarHookInstaller(private val module: XposedModule, private va
                             }
                         }
                         endpoint?.takeIf { it.service === service }?.binder ?: original
-                    } else if (service != null && intent?.action == SidebarEntryProtocol.BIND_ACTION) {
-                        if (entryEndpoint == null) {
-                            val targetUid = ColorOsSidebarTarget.supportedUid(service)
-                            if (targetUid == Process.myUid()) {
-                                entryEndpoint = ColorOsSidebarEntryEndpoint(service, loader, configuration, ::log)
-                            } else {
-                                // 身份校验没过就没有 endpoint，绑定会拿到原生 Binder，目录必然超时。
-                                log(
-                                    Log.WARN,
-                                    "SIDEBAR_ENTRY_TARGET_REJECT_uid" + (targetUid ?: -1) +
-                                        "_me" + Process.myUid(),
-                                    null,
-                                )
-                            }
-                        }
-                        entryEndpoint?.takeIf { it.service === service }?.binder ?: original
                     } else original
                 }
             handles += module.hook(unbind).setId("free.allapps.unbind")
@@ -181,16 +158,10 @@ internal class SidebarHookInstaller(private val module: XposedModule, private va
                     val original = chain.proceed()
                     val intent = chain.getArg(0) as? Intent
                     if (intent?.action == ColorOsSidebarTarget.BIND_ACTION) endpoint?.onUnbound(intent.identifier)
-                    if (intent?.action == SidebarEntryProtocol.BIND_ACTION) entryEndpoint?.onUnbound(intent.identifier)
                     original
                 }
             handles += module.hook(destroy).setId("free.allapps.destroy")
                 .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE).intercept { chain ->
-                    if (entryEndpoint?.service === chain.thisObject) {
-                        val previous = entryEndpoint
-                        entryEndpoint = null
-                        previous?.dispose()
-                    }
                     if (endpoint?.service === chain.thisObject) {
                         val previous = endpoint
                         endpoint = null

@@ -71,6 +71,8 @@ internal data class ModuleSettingsSnapshot(
     /** 背景滑条：负值为黑色遮罩浓度，正值为系统模糊，0 为不处理背景。 */
     val backdropLevel: Int = ModulePreferences.DEFAULT_BACKDROP_LEVEL,
     val autoCloseWindow: Boolean = ModulePreferences.DEFAULT_AUTO_CLOSE_WINDOW,
+    /** 最近任务里隐藏小窗任务；默认关闭，开启后小窗应用不再出现在最近任务卡片里。 */
+    val hideZoomInRecents: Boolean = ModulePreferences.DEFAULT_HIDE_ZOOM_IN_RECENTS,
     /** 长按迷你窗静音，再次长按恢复；普通小窗不响应。 */
     val longPressMuteEnabled: Boolean = ModulePreferences.DEFAULT_LONG_PRESS_MUTE,
     /** 贴边挂机：收成贴边浮标后保持应用继续运行。 */
@@ -173,6 +175,7 @@ internal data class ModuleSettingsSnapshot(
         get() = zoomInteractionActive && zoomLaunchClipboard
     val autoCloseWindowEffective: Boolean
         get() = zoomInteractionActive && autoCloseWindow
+    val hideZoomInRecentsEffective: Boolean get() = enabled && hideZoomInRecents
     val floatKeepAliveEffective: Boolean get() = zoomInteractionActive && floatKeepAlive
     /** 长按迷你窗只跟模块总开关走。 */
     val longPressMuteEffective: Boolean get() = enabled && longPressMuteEnabled
@@ -279,6 +282,7 @@ internal data class ModuleSettingsSnapshot(
             .remove(ModulePreferences.LEGACY_KEY_ZOOM_LAUNCH_INTER_APP_RESULT)
             .remove(ModulePreferences.LEGACY_KEY_ZOOM_LAUNCH_SHARE_RELAY)
             .putBoolean(ModulePreferences.KEY_AUTO_CLOSE_WINDOW, autoCloseWindow)
+            .putBoolean(ModulePreferences.KEY_HIDE_ZOOM_IN_RECENTS, hideZoomInRecents)
             .putBoolean(ModulePreferences.KEY_FLOAT_KEEP_ALIVE, floatKeepAlive)
             .putBoolean(ModulePreferences.KEY_LONG_PRESS_MUTE, longPressMuteEnabled)
             // 旧分项键不再写入，升级后一并清除，避免残留值干扰排查。
@@ -622,6 +626,10 @@ internal data class ModuleSettingsSnapshot(
                 autoCloseWindow = preferences.getBoolean(
                     ModulePreferences.KEY_AUTO_CLOSE_WINDOW,
                     ModulePreferences.DEFAULT_AUTO_CLOSE_WINDOW,
+                ),
+                hideZoomInRecents = preferences.getBoolean(
+                    ModulePreferences.KEY_HIDE_ZOOM_IN_RECENTS,
+                    ModulePreferences.DEFAULT_HIDE_ZOOM_IN_RECENTS,
                 ),
                 floatKeepAlive = preferences.getBoolean(
                     ModulePreferences.KEY_FLOAT_KEEP_ALIVE,

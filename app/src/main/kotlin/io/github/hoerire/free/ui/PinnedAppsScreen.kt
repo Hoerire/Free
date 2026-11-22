@@ -45,6 +45,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -55,6 +57,7 @@ import io.github.hoerire.free.R
 import io.github.hoerire.free.apps.SelectableEntry
 import io.github.hoerire.free.apps.SidebarCatalogState
 import io.github.hoerire.free.apps.SidebarCatalogStatus
+import io.github.hoerire.free.bubble.CloneApp
 import io.github.hoerire.free.config.ModulePreferences
 import io.github.hoerire.free.config.PinnedTarget
 import io.github.hoerire.free.config.PinnedTargetCodec
@@ -74,6 +77,7 @@ internal fun PinnedAppsScreen(
     state: FrameworkConnectionState,
     apps: List<SelectableEntry>,
     sidebarCatalog: SidebarCatalogState,
+    clones: List<CloneApp>,
     onRefreshCatalog: () -> Unit,
     onCancelCatalog: () -> Unit,
     onBack: () -> Unit,
@@ -95,7 +99,10 @@ internal fun PinnedAppsScreen(
                 target !is PinnedTarget.App || target.className.isNotEmpty()
             }
         }
-    val allEntries = remember(launchableApps, sidebarCatalog.entries) { launchableApps + sidebarCatalog.entries }
+    val context = LocalContext.current
+    val allEntries = remember(launchableApps, sidebarCatalog.entries, clones, context) {
+        launchableApps + sidebarCatalog.entries + cloneEntries(context, clones)
+    }
     var pickerOpen by remember { mutableStateOf(false) }
     var pickerQuery by remember { mutableStateOf("") }
     // 当前编辑哪一组：默认组始终参与，第二组只在下面的「生效位置」所选那一侧出现。
@@ -205,6 +212,7 @@ internal fun PinnedAppsScreen(
                             AddedAppRow(
                                 component = component,
                                 app = appByComponent[component],
+                                catalogLoading = sidebarCatalog.status == SidebarCatalogStatus.Loading,
                                 index = index,
                                 enabled = state.settingsEditable,
                                 draggable = state.settingsEditable && displayed.size > 1,
@@ -426,6 +434,7 @@ internal fun PinnedAppsScreen(
 private fun AddedAppRow(
     component: PinnedTarget,
     app: SelectableEntry?,
+    catalogLoading: Boolean,
     index: Int,
     enabled: Boolean,
     draggable: Boolean,
@@ -480,7 +489,11 @@ private fun AddedAppRow(
     ) {
         BasicComponent(
             title = app?.label ?: component.displayIdentity(),
-            summary = if (app == null) stringResource(R.string.pinned_app_missing) else null,
+            summary = when {
+                app != null -> null
+                catalogLoading -> stringResource(R.string.sidebar_catalog_loading)
+                else -> stringResource(R.string.pinned_app_missing)
+            },
             startAction = {
                 if (app != null) {
                     AppIcon(app)
@@ -571,3 +584,33 @@ internal fun radialGroupSideLabel(side: RadialGroupSide): String =
             RadialGroupSide.Right -> R.string.radial_side_right
         },
     )
+
+/**
+ * 应用分身条目。
+ *
+ * 模块进程没有 `INTERACT_ACROSS_USERS`，自己枚举不到其他用户；这里直接用气泡通知已在用的
+ * 分身目录（SystemUI 侧扫描后广播过来），不新增任何通道。
+ *
+ * 别名固定为 `包名#用户id`：两侧（App 与 system_server）都必须算出同一个值，
+ * 否则固定项在扇形里匹配不上。启动 Activity 由 system_server 侧按目标用户现查，
+ * 不写进别名——同一个包在不同用户下解析到的入口可能不同。
+ */
+private fun cloneEntries(context: android.content.Context, clones: List<CloneApp>): List<SelectableEntry> {
+    if (clones.isEmpty()) return emptyList()
+    val size = io.github.hoerire.free.platform.coloros.SidebarEntryProtocol.ICON_SIZE
+    return clones.map { clone ->
+        SelectableEntry(
+            target = PinnedTarget.Sidebar(
+                PinnedTarget.Kind.CloneApp,
+                clone.packageName + "#" + clone.userId,
+                clone.userId,
+            ),
+            label = clone.label.take(160),
+            packageName = clone.packageName.take(256),
+            icon = clone.icon ?: runCatching {
+                context.packageManager.getApplicationIcon(clone.packageName).toBitmap(size, size)
+            }.getOrElse { context.packageManager.defaultActivityIcon.toBitmap(size, size) },
+            badge = io.github.hoerire.free.apps.CloneBadges.of(context, clone.userId),
+        )
+    }
+}

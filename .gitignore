@@ -44,6 +44,7 @@ Thumbs.db
 
 # 本地运维：交接文档、约束、token、本地脚本与临时/发布目录，一律不入库
 /HANDOFF.md
+/HANDOFF_SIDEBAR_TOOLS.md
 /HANDOFF_NEXT.md
 /CONSTRAINTS.md
 /FLOW_JUMP_HANDOFF.md

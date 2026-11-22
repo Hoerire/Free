@@ -1,16 +1,9 @@
 package io.github.hoerire.free.apps
 
-import android.app.BroadcastOptions
 import android.content.Context
-import android.content.Intent
 import android.os.Handler
 import android.os.Looper
-import android.os.Message
-import android.os.Messenger
-import android.os.Process
-import android.os.SystemClock
-import io.github.hoerire.free.platform.coloros.SidebarEntryProtocol
-import java.util.UUID
+import java.util.concurrent.Executors
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -20,93 +13,76 @@ internal data class SidebarCatalogState(
     val status: SidebarCatalogStatus = SidebarCatalogStatus.Idle,
 )
 
-/** 仅在页面可见时请求；缓存只供显示，目录失败时不允许添加旧条目。 */
+/**
+ * 侧边栏条目目录，**只在本进程读**。
+ *
+ * 旧实现通过广播把请求发给 system_server，再由 system_server 去 bind 侧边栏的 `:ui`
+ * 服务取数据；那条链路在部分机型上绑定必失败、且死 binder 不会自愈。现在改为：
+ * 本进程用 DexClassLoader/已安装包的 ClassLoader 打开侧边栏 APK，直接读它的工具表
+ * （见 [SidebarLocalTools]）。页面可见时刷新一次即可，没有超时重试链路。
+ */
 internal class SidebarEntryRepository(private val context: Context) {
     private val handler = Handler(Looper.getMainLooper())
-    private val reply = Messenger(Handler(handler.looper, ::receive))
-    private val mutableState = MutableStateFlow(SidebarCatalogState())
+    private val cache = SidebarCatalogCache(context)
+    // 先用上次成功读到的目录顶上：首帧就不会把已固定的工具显示成"条目已移除"。
+    private val mutableState = MutableStateFlow(
+        cache.load().let { cached ->
+            if (cached.isEmpty()) {
+                SidebarCatalogState()
+            } else {
+                SidebarCatalogState(cached, SidebarCatalogStatus.Ready)
+            }
+        },
+    )
     val state = mutableState.asStateFlow()
-    private var id: String? = null
-    private var transfer: CatalogTransfer<SelectableEntry, io.github.hoerire.free.config.PinnedTarget>? = null
-    private var attempt = 0
-    private val timeout = Runnable { fail() }
-    // 重试必须复用同一条计数链路：调 refresh() 会把 attempt 归零，变成无限重试。
-    private val retry = Runnable {
-        if (mutableState.value.status == SidebarCatalogStatus.Loading) request()
+    private val local = SidebarLocalTools(context)
+    private val worker = Executors.newSingleThreadExecutor { task ->
+        Thread(task, "Free-LocalCatalog")
     }
 
-    /**
-     * 本轮流式读取的起始时刻，只用来给「正在读取」兜底。
-     *
-     * 页面可见期间会反复 refresh()（生命周期、重新组合都会触发），每次都会把 [attempt]
-     * 归零。只靠重试次数的话，侧边栏一直不响应时状态会永远停在 Loading，重试按钮又被禁用，
-     * 界面就卡死在「正在读取侧边栏目录」。所以另设一条按墙钟时间走的兜底线：
-     * 同一轮 Loading 超过 [MAX_LOADING_MS] 一律判定失败，界面切到可重试状态。
-     */
-    private var loadingSince = 0L
-    private val giveUp = Runnable { giveUpLoading() }
+    /** 每次刷新递增；迟到的结果直接丢弃，避免旧结果覆盖新状态。 */
+    private var generation = 0
+    private val timeout = Runnable { fail() }
 
     fun refresh() {
-        cancelInternal()
-        attempt = 0
-        request()
-    }
-
-    /** 发起一次目录请求；失败由 [fail] 按退避重试，最多 [MAX_ATTEMPTS] 次。 */
-    private fun request() {
-        val request = UUID.randomUUID().toString()
-        id = request
-        transfer = CatalogTransfer(SidebarEntryProtocol.MAX_ENTRIES, SelectableEntry::target)
+        val current = ++generation
         enterLoading()
-        handler.postDelayed(timeout, SidebarEntryProtocol.TIMEOUT_MS)
-        try {
-            context.sendBroadcast(Intent(SidebarEntryProtocol.CATALOG_ACTION).setPackage("android").apply {
-                putExtra(SidebarEntryProtocol.ID, request)
-                putExtra(SidebarEntryProtocol.DEADLINE, SystemClock.uptimeMillis() + SidebarEntryProtocol.TIMEOUT_MS)
-                putExtra(SidebarEntryProtocol.REPLY, reply)
-            }, null, BroadcastOptions.makeBasic().setShareIdentityEnabled(true).toBundle())
-        } catch (_: RuntimeException) { fail() }
+        handler.postDelayed(timeout, LOAD_TIMEOUT_MS)
+        worker.execute {
+            val entries = try {
+                local.load()
+            } catch (_: Throwable) {
+                // 加载 OEM dex 可能抛 LinkageError/NoClassDefFoundError，按失败处理。
+                emptyList()
+            }
+            if (entries.isNotEmpty()) cache.save(entries)
+            handler.post {
+                if (current != generation) return@post
+                handler.removeCallbacks(timeout)
+                mutableState.value = if (entries.isEmpty()) {
+                    SidebarCatalogState(mutableState.value.entries, SidebarCatalogStatus.Unavailable)
+                } else {
+                    SidebarCatalogState(entries, SidebarCatalogStatus.Ready)
+                }
+            }
+        }
     }
 
-    /** 页面离开：连同兜底预算一起清掉，下次进入重新给足一整轮时间。 */
+    /** 页面离开：丢掉本轮结果，下次进入重新读。 */
     fun cancel() {
-        cancelInternal()
-        resetLoadingBudget()
-    }
-
-    private fun cancelInternal() {
-        id = null
-        transfer?.cancel()
-        transfer = null
+        generation++
         handler.removeCallbacks(timeout)
-        handler.removeCallbacks(retry)
         if (mutableState.value.status == SidebarCatalogStatus.Loading) {
             mutableState.value = mutableState.value.copy(status = SidebarCatalogStatus.Idle)
         }
     }
 
     private fun enterLoading() {
-        if (loadingSince == 0L) {
-            loadingSince = SystemClock.uptimeMillis()
-            handler.removeCallbacks(giveUp)
-            handler.postDelayed(giveUp, MAX_LOADING_MS)
-        }
         mutableState.value = mutableState.value.copy(status = SidebarCatalogStatus.Loading)
     }
 
-    private fun resetLoadingBudget() {
-        loadingSince = 0L
-        handler.removeCallbacks(giveUp)
-    }
-
-    /** 兜底：同一轮 Loading 走完 [MAX_LOADING_MS] 还没结果，不再让界面干等。 */
-    private fun giveUpLoading() {
-        if (mutableState.value.status != SidebarCatalogStatus.Loading) {
-            resetLoadingBudget()
-            return
-        }
-        cancelInternal()
-        resetLoadingBudget()
+    private fun fail() {
+        // 读不到时保留上一次成功的结果，避免固定位的工具/快捷项变成空格。
         if (mutableState.value.entries.isNotEmpty()) {
             mutableState.value = mutableState.value.copy(status = SidebarCatalogStatus.Ready)
             return
@@ -114,64 +90,8 @@ internal class SidebarEntryRepository(private val context: Context) {
         mutableState.value = mutableState.value.copy(status = SidebarCatalogStatus.Unavailable)
     }
 
-    private fun receive(message: Message): Boolean {
-        if (id == null || message.sendingUid != Process.SYSTEM_UID || message.arg1 != SidebarEntryProtocol.VERSION) return true
-        try {
-            val data = message.peekData() ?: return true
-            if (data.getString(SidebarEntryProtocol.ID) != id) return true
-            when (message.what) {
-                SidebarEntryProtocol.ITEM -> {
-                    val entry = SidebarEntryProtocol.readEntry(data, (Process.myUid() / 100_000))
-                    if (entry == null || transfer?.append(data.getInt(SidebarEntryProtocol.INDEX, -1), entry) != true) fail()
-                }
-                SidebarEntryProtocol.COMPLETE -> {
-                    val entries = transfer?.complete(data.getInt(SidebarEntryProtocol.COUNT, -1))
-                    if (entries == null) fail() else {
-                        cancelInternal()
-                        resetLoadingBudget()
-                        mutableState.value = SidebarCatalogState(entries, SidebarCatalogStatus.Ready)
-                    }
-                }
-                SidebarEntryProtocol.FAILED -> fail()
-            }
-        } catch (_: RuntimeException) { fail() }
-        return true
-    }
-
-    private fun fail() {
-        cancelInternal()
-        // 重试用尽仍失败：如果之前成功读到过目录，就继续沿用那份结果，
-        // 不要把界面切成「暂不可用」，否则固定位的工具/快捷项会变空格。
-        if (mutableState.value.entries.isNotEmpty()) {
-            resetLoadingBudget()
-            mutableState.value = mutableState.value.copy(
-                status = SidebarCatalogStatus.Ready,
-                entries = mutableState.value.entries,
-            )
-            return
-        }
-        // 侧边栏进程常在开机/重启后晚于模块就绪，一次失败就置 Unavailable 会让
-        // 「更多」面板一直不可用；这里退避重试，成功后自然恢复。
-        if (attempt < MAX_ATTEMPTS) {
-            attempt++
-            enterLoading()
-            handler.postDelayed(retry, RETRY_DELAYS_MS[(attempt - 1).coerceIn(0, RETRY_DELAYS_MS.lastIndex)])
-            return
-        }
-        resetLoadingBudget()
-        mutableState.value = mutableState.value.copy(status = SidebarCatalogStatus.Unavailable)
-    }
-
     private companion object {
-        const val MAX_ATTEMPTS = 3
-        val RETRY_DELAYS_MS = longArrayOf(600L, 1_500L, 3_000L)
-
-        /**
-         * 一轮「正在读取」的最长墙钟时间。
-         *
-         * 三次 7 秒超时加上退避约 26 秒，这里留到 30 秒：只作为最后兜底，
-         * 正常失败会由系统侧的即时 FAILED 提前结束。
-         */
-        const val MAX_LOADING_MS = 30_000L
+        /** 首次加载侧边栏 dex 需要一两百毫秒；超过这个时间按失败处理，不让界面干等。 */
+        const val LOAD_TIMEOUT_MS = 15_000L
     }
 }

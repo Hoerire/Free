@@ -58,6 +58,8 @@ internal class ImmediateSuggestionController(
     private val clipboardManager: ClipboardManager? =
         context.getSystemService(ClipboardManager::class.java)
     private val packageManager: PackageManager = context.packageManager
+    /** 浏览器包名集合：进程内缓存，链接解析时用来区分「应用」与「浏览器」。 */
+    private var browsers: Set<String>? = null
     private val activeTorchIds = HashSet<String>()
     private var lastClipboardText: String? = null
     /** 上一次成功展示的剪贴板内容与时刻：两条来路共用的去重窗。 */
@@ -402,35 +404,41 @@ internal class ImmediateSuggestionController(
             ClipboardClassifier.KIND_LINK -> {
                 val shopping = result.kind == ClipboardClassifier.KIND_SHOPPING
                 val uri = Uri.parse(result.value)
-                val appPackage = result.appPackage
-                val preferred = if (appPackage != null && isInstalled(appPackage)) {
-                    Intent(Intent.ACTION_VIEW, uri).setPackage(appPackage)
-                } else {
-                    preferredViewIntent(uri)
-                }
-                val target: ResolveInfo? =
-                    packageManager.resolveActivity(preferred, PackageManager.MATCH_DEFAULT_ONLY)
-                val targetInfo = target?.activityInfo
                 val hostName = ClipboardClassifier.hostOf(result.value)
                 val body = hostName?.takeIf { it.isNotEmpty() } ?: result.value
+                val target = appTargetFor(uri, result.appPackage)
                 val title: String
                 val intent: Intent
-                if (target != null && targetInfo != null &&
-                    !isBrowserPackage(targetInfo.packageName)
-                ) {
-                    title = if (shopping) {
-                        "打开购物应用"
-                    } else {
-                        "用" + target.loadLabel(packageManager) + "打开"
-                    }
-                    intent = Intent(Intent.ACTION_VIEW, uri).setClassName(
-                        targetInfo.packageName,
-                        targetInfo.name,
+                if (target != null) {
+                    title = "用" + target.info.loadLabel(packageManager) + "打开"
+                    intent = Intent(Intent.ACTION_VIEW, target.uri).setClassName(
+                        target.info.activityInfo.packageName,
+                        target.info.activityInfo.name,
                     )
                 } else {
-                    title = if (shopping) "打开购物链接" else "打开链接"
-                    intent = Intent(Intent.ACTION_VIEW, uri)
+                    // 认不出具体应用时交给浏览器：优先指名默认浏览器，气泡标题与其它建议一致。
+                    val browser = browserTargetFor(uri)
+                    title = if (browser != null) {
+                        "用" + browser.loadLabel(packageManager) + "打开"
+                    } else if (shopping) {
+                        "打开购物链接"
+                    } else {
+                        "打开链接"
+                    }
+                    intent = if (browser != null) {
+                        Intent(Intent.ACTION_VIEW, uri).setClassName(
+                            browser.activityInfo.packageName,
+                            browser.activityInfo.name,
+                        )
+                    } else {
+                        Intent(Intent.ACTION_VIEW, uri)
+                    }
                 }
+                host.logSuggestion(
+                    "clipboard link " + (hostName ?: "") + " -> " +
+                        (target?.info?.activityInfo?.packageName ?: "browser"),
+                    null,
+                )
                 showClipboardIntentSuggestion(
                     id, intent, title, body,
                     if (shopping) MaterialSuggestionIcon.PACKAGE else MaterialSuggestionIcon.LINK,
@@ -544,27 +552,90 @@ internal class ImmediateSuggestionController(
         return null
     }
 
-    private fun preferredViewIntent(uri: Uri): Intent {
-        val base = Intent(Intent.ACTION_VIEW, uri)
-        try {
-            val targets =
-                packageManager.queryIntentActivities(base, PackageManager.MATCH_DEFAULT_ONLY)
-            for (target in targets) {
-                val activityInfo = target.activityInfo ?: continue
-                if (isBrowserPackage(activityInfo.packageName)) continue
-                return Intent(base).setClassName(activityInfo.packageName, activityInfo.name)
+    /** 一条链接最终用哪个应用、哪个 URI 打开（URI 可能被改写成该应用声明的域名）。 */
+    private data class LinkTarget(val info: ResolveInfo, val uri: Uri)
+
+    /**
+     * 用哪个应用打开这条链接。三层判断，优先认出具体应用：
+     *
+     * 1. 域名表给出包名，且该包确实能处理这个链接；
+     * 2. 包处理不了原域名时，试一下它常用的 App Link 前缀域名（applink.<host>）——
+     *    国内分享短链经常是网页域名，App 只在自己的 applink 域名上注册了入口；
+     * 3. 让系统列出所有能打开它的应用，取第一个非浏览器。
+     *
+     * 都只命中浏览器时返回 null，由调用方退化成浏览器兜底。
+     */
+    private fun appTargetFor(uri: Uri, appPackage: String?): LinkTarget? {
+        if (appPackage != null && isInstalled(appPackage)) {
+            resolveInPackage(uri, appPackage)?.let { return LinkTarget(it, uri) }
+            appLinkUri(uri)?.let { rewritten ->
+                resolveInPackage(rewritten, appPackage)?.let { return LinkTarget(it, rewritten) }
             }
-        } catch (ignored: Throwable) {
         }
-        return base
+        val targets = runCatching {
+            packageManager.queryIntentActivities(
+                Intent(Intent.ACTION_VIEW, uri),
+                PackageManager.MATCH_DEFAULT_ONLY,
+            )
+        }.getOrNull().orEmpty()
+        val target = targets.firstOrNull {
+            val info = it.activityInfo ?: return@firstOrNull false
+            !isBrowserPackage(info.packageName)
+        } ?: return null
+        return LinkTarget(target, uri)
+    }
+
+    private fun resolveInPackage(uri: Uri, packageName: String): ResolveInfo? = runCatching {
+        packageManager.resolveActivity(
+            Intent(Intent.ACTION_VIEW, uri).setPackage(packageName),
+            PackageManager.MATCH_DEFAULT_ONLY,
+        )
+    }.getOrNull()?.takeIf { !isBrowserPackage(it.activityInfo?.packageName) }
+
+    /** 网页分享域名 → 应用注册的 applink 域名；已经带前缀或没有域名时返回 null。 */
+    private fun appLinkUri(uri: Uri): Uri? {
+        val host = uri.host ?: return null
+        if (host.startsWith("applink.")) return null
+        return runCatching { uri.buildUpon().authority("applink." + host).build() }.getOrNull()
+    }
+
+    /** 默认浏览器：认不出应用时用它兜底。 */
+    private fun browserTargetFor(uri: Uri): ResolveInfo? =
+        runCatching {
+            packageManager.resolveActivity(
+                Intent(Intent.ACTION_VIEW, uri),
+                PackageManager.MATCH_DEFAULT_ONLY,
+            )
+        }.getOrNull()?.takeIf { !it.activityInfo?.packageName.isNullOrEmpty() }
+
+    /**
+     * 浏览器包名集合：按 Android 的「浏览器」分类查，而不是猜包名。
+     * 名字判断只作为兜底——国内浏览器（Via、夸克、UC 等）不一定带 browser 字样。
+     */
+    private fun browserPackages(): Set<String> {
+        browsers?.let { return it }
+        val found = HashSet<String>()
+        runCatching {
+            val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_BROWSER)
+            packageManager.queryIntentActivities(intent, 0).forEach { target ->
+                target.activityInfo?.packageName?.let(found::add)
+            }
+        }
+        browsers = found
+        return found
     }
 
     private fun isBrowserPackage(packageName: String?): Boolean {
-        if (packageName == null) return false
-        val normalized = packageName.lowercase(Locale.ROOT)
+        val name = packageName ?: return false
+        if (name in browserPackages()) return true
+        val normalized = name.lowercase(Locale.ROOT)
         return normalized.contains("browser") || normalized.contains("chrome") ||
             normalized.contains("edge") || normalized.contains("firefox") ||
-            normalized.contains("opera") || normalized.contains("quark")
+            normalized.contains("opera") || normalized.contains("quark") ||
+            normalized == "mark.via" || normalized.contains("ucmobile") ||
+            normalized.contains("sogou") || normalized.contains("baidu.searchbox") ||
+            normalized.contains("qihoo") || normalized.contains("vivo.browser") ||
+            normalized.contains("mi.globalbrowser") || normalized.contains("miui.browser")
     }
 
     private fun startActivity(intent: Intent) {

@@ -134,6 +134,10 @@ internal object ModulePreferences {
     const val KEY_AUTO_CLOSE_WINDOW = "auto_close_window_v1"
     const val DEFAULT_AUTO_CLOSE_WINDOW = false
 
+    /** 最近任务：把当前处于小窗状态的任务从最近任务卡片里隐藏。 */
+    const val KEY_HIDE_ZOOM_IN_RECENTS = "hide_zoom_in_recents_v1"
+    const val DEFAULT_HIDE_ZOOM_IN_RECENTS = false
+
     /** 长按静音：长按迷你窗把该应用静音，再次长按恢复；普通小窗不响应。 */
     const val KEY_LONG_PRESS_MUTE = "mini_long_press_v1"
     const val DEFAULT_LONG_PRESS_MUTE = false

@@ -53,24 +53,106 @@ internal object ClipboardClassifier {
         "you.163.com", "mogujie.com", "dangdang.com", "smzdm.com",
     )
 
-    /** 属于某个特定应用的域名：该应用已安装时用它打开。 */
+    /**
+     * 分享域名到应用的映射：命中的域名会优先用这个应用打开。
+     *
+     * 系统自身的 App Link 只能覆盖「在 manifest 里声明过域名」的应用；大量国内应用把
+     * 分享短链放在自己的短域名上，或者声明了域名却没通过验证，解析出来就只剩浏览器。
+     * 这里补一层常见域名，宁可映射多也不要让链接落到浏览器。
+     * 命中后仍会用 PackageManager 校验该应用确实能处理这个链接，包没装或解析不到时自动退回。
+     */
     private val HOST_APPS: Map<String, String> = linkedMapOf(
+        // --- 微信 / 办公 ---
         "mp.weixin.qq.com" to "com.tencent.mm",
         "weixin.qq.com" to "com.tencent.mm",
+        "work.weixin.qq.com" to "com.tencent.wework",
+        "docs.qq.com" to "com.tencent.mobileqq",
+
+        // --- 短视频 / 社区 ---
+        "douyin.com" to "com.ss.android.ugc.aweme",
+        "iesdouyin.com" to "com.ss.android.ugc.aweme",
+        "kuaishou.com" to "com.smile.gifmaker",
+        "gifshow.com" to "com.smile.gifmaker",
+        "chenzhongtech.com" to "com.smile.gifmaker",
         "b23.tv" to "tv.danmaku.bili",
         "bilibili.com" to "tv.danmaku.bili",
-        "v.douyin.com" to "com.ss.android.ugc.aweme",
-        "douyin.com" to "com.ss.android.ugc.aweme",
+        "bili2233.cn" to "tv.danmaku.bili",
         "xhslink.com" to "com.xingin.xhs",
         "xiaohongshu.com" to "com.xingin.xhs",
         "zhihu.com" to "com.zhihu.android",
         "weibo.com" to "com.sina.weibo",
         "weibo.cn" to "com.sina.weibo",
         "t.cn" to "com.sina.weibo",
-        "music.163.com" to "com.netease.cloudmusic",
-        "i.y.qq.com" to "com.tencent.qqmusic",
-        "y.qq.com" to "com.tencent.qqmusic",
+        "tieba.baidu.com" to "com.baidu.tieba",
+        "douban.com" to "com.douban.frodo",
+        "toutiao.com" to "com.ss.android.article.news",
+        "ixigua.com" to "com.ss.android.article.video",
+        "coolapk.com" to "com.coolapk.market",
+        "jianshu.com" to "com.jianshu.haruki",
+        "csdn.net" to "net.csdn.csdnplus",
 
+        // --- 视频 ---
+        "v.qq.com" to "com.tencent.qqlive",
+        "iqiyi.com" to "com.qiyi.video",
+        "qiyi.com" to "com.qiyi.video",
+        "youku.com" to "com.youku.phone",
+        "mgtv.com" to "com.hunantv.imgo.activity",
+        "tv.sohu.com" to "com.sohu.sohuvideo",
+
+        // --- 音乐 / 有声 ---
+        "music.163.com" to "com.netease.cloudmusic",
+        "163cn.tv" to "com.netease.cloudmusic",
+        "y.qq.com" to "com.tencent.qqmusic",
+        "c.y.qq.com" to "com.tencent.qqmusic",
+        "kugou.com" to "com.kugou.android",
+        "kuwo.cn" to "cn.kuwo.player",
+        "ximalaya.com" to "com.ximalaya.ting.android",
+        "qingting.fm" to "com.qingting.fm",
+        "qtfm.cn" to "com.qingting.fm",
+        "lizhi.fm" to "com.lizhi.fm",
+
+        // --- 阅读 / 短剧 ---
+        "changdunovel.com" to "com.phoenix.read",
+        "novelquickapp.com" to "com.phoenix.read",
+        "novel8662.ugurl.cn" to "com.phoenix.read",
+        "fqnovel.ugurl.cn" to "com.dragon.read",
+        "fanqienovel.com" to "com.dragon.read",
+        "qidian.com" to "com.qidian.QDReader",
+        "weread.qq.com" to "com.tencent.weread",
+        "jjwxc.net" to "com.jjwxc.reader",
+
+        // --- 购物 / 生活服务 ---
+        "taobao.com" to "com.taobao.taobao",
+        "tmall.com" to "com.tmall.wireless",
+        "tmall.hk" to "com.tmall.wireless",
+        "tb.cn" to "com.taobao.taobao",
+        "jd.com" to "com.jingdong.app.mall",
+        "jd.hk" to "com.jingdong.app.mall",
+        "3.cn" to "com.jingdong.app.mall",
+        "pinduoduo.com" to "com.xunmeng.pinduoduo",
+        "yangkeduo.com" to "com.xunmeng.pinduoduo",
+        "suning.com" to "com.suning.mobile.ebuy",
+        "vip.com" to "com.vip.vipapp",
+        "kaola.com" to "com.kaola",
+        "you.163.com" to "com.netease.yanxuan",
+        "mogujie.com" to "com.mogujie",
+        "dangdang.com" to "com.dangdang.buy2",
+        "smzdm.com" to "com.smzdm.client.android",
+        "goofish.com" to "com.taobao.idlefish",
+        "2.taobao.com" to "com.taobao.idlefish",
+        "dewu.com" to "com.shizhuang.duapp",
+        "meituan.com" to "com.sankuai.meituan",
+        "dpurl.cn" to "com.sankuai.meituan",
+        "dianping.com" to "com.dianping.v1",
+        "ele.me" to "me.ele",
+        "12306.cn" to "com.MobileTicket",
+        "ctrip.com" to "ctrip.android.view",
+        "trip.com" to "ctrip.android.view",
+        "qunar.com" to "com.Qunar",
+        "mafengwo.cn" to "com.mfw.roadbook",
+        "alipay.com" to "com.eg.android.AlipayGphone",
+
+        // --- 地图 ---
         "surl.amap.com" to "com.autonavi.minimap",
         "uri.amap.com" to "com.autonavi.minimap",
         "amap.com" to "com.autonavi.minimap",
@@ -82,6 +164,25 @@ internal object ClipboardClassifier {
         "maps.google.com" to "com.google.android.apps.maps",
         "maps.apple.com" to "com.apple.maps",
         "maps.yandex.com" to "ru.yandex.yandexmaps",
+
+        // --- 海外 ---
+        "youtube.com" to "com.google.android.youtube",
+        "youtu.be" to "com.google.android.youtube",
+        "twitter.com" to "com.twitter.android",
+        "x.com" to "com.twitter.android",
+        "instagram.com" to "com.instagram.android",
+        "tiktok.com" to "com.zhiliaoapp.musically",
+        "t.me" to "org.telegram.messenger",
+        "facebook.com" to "com.facebook.katana",
+        "reddit.com" to "com.reddit.frontpage",
+        "spotify.com" to "com.spotify.music",
+        "discord.gg" to "com.discord",
+        "twitch.tv" to "tv.twitch.android.app",
+        "pinterest.com" to "com.pinterest",
+        "netflix.com" to "com.netflix.mediaclient",
+        "github.com" to "com.github.android",
+        "wikipedia.org" to "org.wikipedia",
+        "linkedin.com" to "com.linkedin.android",
     )
 
     /** 深链 scheme 与其对应应用的映射。 */
@@ -101,9 +202,26 @@ internal object ClipboardClassifier {
         "xhsdiscover" to "com.xingin.xhs",
         "zhihu" to "com.zhihu.android",
         "sinaweibo" to "com.sina.weibo",
+        "weibo" to "com.sina.weibo",
         "qqmusic" to "com.tencent.qqmusic",
         "orpheus" to "com.netease.cloudmusic",
         "mqqapi" to "com.tencent.mobileqq",
+        "mqq" to "com.tencent.mobileqq",
+        "qqlink" to "com.tencent.mobileqq",
+        "kwai" to "com.smile.gifmaker",
+        "kuaishou" to "com.smile.gifmaker",
+        "douyin" to "com.ss.android.ugc.aweme",
+        "coolapk" to "com.coolapk.market",
+        "tbopen" to "com.taobao.taobao",
+        "openapp.jdmobile" to "com.jingdong.app.mall",
+        "pinduoduo" to "com.xunmeng.pinduoduo",
+        "imeituan" to "com.sankuai.meituan",
+        "dianping" to "com.dianping.v1",
+        "weread" to "com.tencent.weread",
+        "qidian" to "com.qidian.QDReader",
+        "youtube" to "com.google.android.youtube",
+        "instagram" to "com.instagram.android",
+        "snssdk" to "com.ss.android.ugc.aweme",
     )
 
     // --- 电话 -------------------------------------------------------------------------

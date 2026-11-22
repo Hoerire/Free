@@ -56,7 +56,7 @@ import io.github.hoerire.free.hook.OemClasses
  * 松手时按选中目标分两条启动路径：
  * - 普通应用：本进程持 ActivityOptions 直接 startActivity（见 [launchCommittedEntry]）；
  * - 侧边栏条目（工具/快捷方式/侧边栏应用）：转交侧边栏进程执行原生路由
- *   （见 [io.github.hoerire.free.platform.coloros.ColorOsEntryCatalogBroker]）。
+ *   （见 [io.github.hoerire.free.platform.coloros.ColorOsEntryCatalog]）。
  *
  * 环境门禁：横屏/游戏模式暂停、关键系统界面在前台、目标在前台黑名单内时一律不接管手势。
  * 浮层窗口类型见 [createOverlayParams]，需压在输入法之上，否则键盘弹出会遮挡扇形。
@@ -109,7 +109,7 @@ internal class ColorOsFreeformCoordinator(
                 }
             }
         }
-    private val entryCatalog = ColorOsEntryCatalogBroker(context, handler, logger) { entries ->
+    private val entryCatalog = ColorOsEntryCatalog(context, handler, logger) { entries ->
         appCatalog.updateSidebarEntries(entries, lastSettings)
     }
 
@@ -1107,6 +1107,11 @@ internal class ColorOsFreeformCoordinator(
     }
 
     override fun onEntryCommitted(entry: RadialEntry) {
+        // 诊断：扇形里一次提交的最早落点。没有这行说明点击没进模块的浮层（可能是原生面板）。
+        debug(
+            "FAN_COMMIT_" + entry.target.javaClass.simpleName + "_" +
+                ((entry.target as? PinnedTarget.Sidebar)?.alias ?: "") + "_gen" + pointerGeneration,
+        )
         entryLaunchGeneration++
         entryCatalog.cancelLaunch()
         val generation = pointerGeneration
@@ -1151,10 +1156,22 @@ internal class ColorOsFreeformCoordinator(
     }
 
     private fun launchCommittedEntry(entry: RadialEntry) {
-        if (!isGestureEnvironmentAllowed()) return
+        // 诊断：扇形提交后进入启动流程的落点（受「详细日志」控制）。
+        debug(
+            "SYSTEM_LAUNCH_ENTER_" + entry.target.javaClass.simpleName + "_" +
+                ((entry.target as? PinnedTarget.Sidebar)?.alias ?: ""),
+        )
+        if (!isGestureEnvironmentAllowed()) {
+            logger(Log.WARN, "SYSTEM_LAUNCH_ENV_BLOCKED", null)
+            return
+        }
         val target = entry.target
         if (target is PinnedTarget.Sidebar) {
-            val focus = focusedWindow() ?: return
+            val focus = focusedWindow()
+            if (focus == null) {
+                logger(Log.WARN, "SYSTEM_LAUNCH_NO_FOCUS_" + target.alias, null)
+                return
+            }
             val rotation = context.getSystemService(android.hardware.display.DisplayManager::class.java)
                 .getDisplay(Display.DEFAULT_DISPLAY)?.rotation ?: return
             val generation = ++entryLaunchGeneration
@@ -1162,18 +1179,36 @@ internal class ColorOsFreeformCoordinator(
             // 只有取屏类工具要求浮层彻底消失；应用/快捷方式在浮层淡出的同时就放行。
             val requiresHiddenOverlay = target.kind == PinnedTarget.Kind.Tool
             // removeViewImmediate 后等待两次合成帧，再把执行权交给取屏类工具。
+            // removeViewImmediate 后等待两次合成帧再执行。这里不再自己判"浮层是否已消失"：
+            // 那一判只在调用前做一次，时机稍差就静默不启动（连日志都没有）。
+            // 交给目录侧的守卫按 30ms 重试，浮层真正消失后才执行 handle()。
             android.view.Choreographer.getInstance().postFrameCallback {
                 android.view.Choreographer.getInstance().postFrameCallback {
-                    if (generation == entryLaunchGeneration &&
-                        (!requiresHiddenOverlay || overlay == null) && isGestureEnvironmentAllowed()) {
+                    debug(
+                        "SYSTEM_LAUNCH_FRAME_" + target.alias +
+                            "_g" + (generation == entryLaunchGeneration) +
+                            "_env" + isGestureEnvironmentAllowed() +
+                            "_ovl" + (overlay == null),
+                    )
+                    if (generation == entryLaunchGeneration && isGestureEnvironmentAllowed()) {
                         entryCatalog.launch(target) {
-                            generation == entryLaunchGeneration &&
-                                (!requiresHiddenOverlay || overlay == null) && isGestureEnvironmentAllowed() &&
-                                // 两组都算「已固定」：只看默认组会把第二组的工具静默丢弃。
-                                lastSettings.isPinned(target) &&
-                                focusedWindow() === focus &&
+                            // 逐项打印守卫条件：任何一条不过都会让启动被静默丢弃，
+                            // 这里把六项判定各打一位，避免再靠猜。
+                            val sameGeneration = generation == entryLaunchGeneration
+                            val overlayGone = !requiresHiddenOverlay || overlay == null
+                            val envOk = isGestureEnvironmentAllowed()
+                            val pinned = lastSettings.isPinned(target)
+                            val sameFocus = focusedWindow() === focus
+                            val sameRotation =
                                 context.getSystemService(android.hardware.display.DisplayManager::class.java)
                                     .getDisplay(Display.DEFAULT_DISPLAY)?.rotation == rotation
+                            debug(
+                                "SYSTEM_GUARD_" + target.alias +
+                                    "_gen" + sameGeneration + "_ovl" + overlayGone +
+                                    "_env" + envOk + "_pin" + pinned +
+                                    "_focus" + sameFocus + "_rot" + sameRotation,
+                            )
+                            sameGeneration && overlayGone && envOk && pinned && sameFocus && sameRotation
                         }
                     }
                 }

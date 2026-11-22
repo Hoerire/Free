@@ -69,6 +69,10 @@ internal class SystemServerHookInstaller(
             logger = { priority, code, throwable -> ModuleLog.forward(priority, code, throwable) },
         ).install(classLoader)
         // 常亮建议：屏幕进入半暗阶段时把状态写给 SystemUI（气泡由它弹）。
+        // 屏幕翻译：厂商自启动管理会在 AMS 里拦掉这次服务启动，只放行这一个 action。
+        TranslationStartupGateHook(module) { priority, code, throwable ->
+            ModuleLog.forward(priority, code, throwable)
+        }.install(classLoader)
         PreSleepDetectionHook(
             module = module,
             configuration = configuration,
