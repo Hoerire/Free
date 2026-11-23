@@ -1,11 +1,9 @@
 package io.github.hoerire.free.hook
 
-import android.util.Log
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import io.github.hoerire.free.log.ModuleLog
 import io.github.hoerire.free.log.VerboseLog
-import java.lang.reflect.Method
 
 /**
  * 自由拖拽：解除内容传送门的长按拖拽准入限制。

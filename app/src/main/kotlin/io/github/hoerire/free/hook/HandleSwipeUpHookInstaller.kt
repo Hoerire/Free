@@ -3,7 +3,6 @@ package io.github.hoerire.free.hook
 import android.annotation.SuppressLint
 import android.graphics.Point
 import android.os.SystemClock
-import android.util.Log
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import io.github.hoerire.free.gesture.HandleSwipeUpModeRemapper

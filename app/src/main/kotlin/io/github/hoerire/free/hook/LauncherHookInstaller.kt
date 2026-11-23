@@ -409,34 +409,28 @@ internal class LauncherHookInstaller(
         ModuleLog.info("LAUNCHER_CORNER_INPUT_CLAIMED")
     }
 
-    /** 向 system_server 索取一次权威设置快照，并接收后续推送。 */
+    /**
+     * 接收模块应用的设置变更广播并重读远程偏好。
+     *
+     * 桌面进程只在底角按下时读设置，不重读会一直拿着开机那一刻的快照；
+     * 广播里带的整份快照由 SystemUI / 侧边栏等校验过身份的作用域进程消费。
+     */
     private fun installSettingsSync(context: android.content.Context) {
         if (!settingsSyncInstalled.compareAndSet(false, true)) return
         val receiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
-                when (intent?.action) {
-                    io.github.hoerire.free.config.ModulePreferences.ACTION_PINNED_TARGETS_CHANGED ->
-                        configuration.forceReload()
-                    io.github.hoerire.free.config.ModulePreferences.ACTION_SETTINGS_PUSHED,
-                    io.github.hoerire.free.config.ModulePreferences.ACTION_SETTINGS_SNAPSHOT -> {
-                        val map = io.github.hoerire.free.config.SettingsBridge.readMap(intent.extras) ?: return
-                        runCatching { io.github.hoerire.free.config.SettingsBridge.decode(map) }
-                            .onSuccess { configuration.override(it) }
-                    }
+                if (intent?.action ==
+                    io.github.hoerire.free.config.ModulePreferences.ACTION_PINNED_TARGETS_CHANGED
+                ) {
+                    configuration.forceReload()
                 }
             }
         }
         runCatching {
             context.registerReceiver(receiver, android.content.IntentFilter().apply {
                 addAction(io.github.hoerire.free.config.ModulePreferences.ACTION_PINNED_TARGETS_CHANGED)
-                addAction(io.github.hoerire.free.config.ModulePreferences.ACTION_SETTINGS_PUSHED)
-                addAction(io.github.hoerire.free.config.ModulePreferences.ACTION_SETTINGS_SNAPSHOT)
             }, android.content.Context.RECEIVER_EXPORTED)
-            context.sendBroadcast(android.content.Intent(io.github.hoerire.free.config.ModulePreferences.ACTION_SETTINGS_REQUEST).apply {
-                setPackage("android")
-                putExtra(io.github.hoerire.free.config.ModulePreferences.EXTRA_REQUESTER_PACKAGE, "com.android.launcher")
-            })
-            ModuleLog.info("LAUNCHER_SETTINGS_SYNC_REQUESTED")
+            ModuleLog.info("LAUNCHER_SETTINGS_SYNC_REGISTERED")
         }.onFailure { ModuleLog.warn("LAUNCHER_SETTINGS_SYNC_FAILED", it) }
     }
 

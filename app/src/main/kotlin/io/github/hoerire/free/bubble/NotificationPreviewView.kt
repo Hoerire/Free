@@ -49,7 +49,6 @@ internal class NotificationPreviewView(
     private val highlightPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val glassEdgePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val overlayPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val particlePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val shapeClip = Path()
     private val appView: TextView
     private val contentView: TextView
@@ -80,8 +79,6 @@ internal class NotificationPreviewView(
     private val fluidCloudPollAction = Runnable { pollFluidCloudPosition() }
     private var currentCornerRadius = 0f
     private var shapeProgress = 1f
-    private var particleProgress = 0f
-    private var particleBurst = false
     private var dismissedAction: (() -> Unit)? = null
 
     /**
@@ -117,11 +114,6 @@ internal class NotificationPreviewView(
             Color.argb(86, 205, 231, 242)
         } else {
             Color.argb(108, 255, 255, 255)
-        }
-        particlePaint.color = if (darkMode) {
-            Color.argb(168, 153, 216, 242)
-        } else {
-            Color.argb(182, 230, 248, 255)
         }
 
         if (icon != null) {
@@ -192,11 +184,6 @@ internal class NotificationPreviewView(
         params.alpha = finalAlpha
         updateLayout()
         if (entranceAnimator?.isRunning == true) return // 入场动画会自然收敛到新值
-    }
-
-    internal fun updateOverlayAlpha(percent: Int) {
-        overlayAlphaPercent = Math.max(0, Math.min(70, percent))
-        if (attached) invalidate()
     }
 
     /** 适配内容，但不改变落点求解器定下的高度。 */
@@ -499,33 +486,6 @@ internal class NotificationPreviewView(
         }
         shapeClip.close()
         canvas.clipPath(shapeClip)
-    }
-
-    private fun drawMicroBubbles(canvas: Canvas) {
-        if (particleProgress <= 0f || (particleProgress >= 1f && !particleBurst)) return
-        val cx = width * 0.5f
-        val cy = height * 0.5f
-        for (i in 0 until 4) {
-            val angle = (i * Math.PI * 0.5 + 0.35).toFloat()
-            val startRadius = Math.min(width, height) * 0.28f
-            val t = if (particleBurst) particleProgress else 1f - particleProgress
-            val distance = if (particleBurst) startRadius * t else startRadius * t
-            val x = cx + Math.cos(angle.toDouble()).toFloat() * distance
-            val y = cy + Math.sin(angle.toDouble()).toFloat() * distance
-            val radius = dp(4.2f + i * 0.9f) * (if (particleBurst) {
-                1f - particleProgress * 0.35f
-            } else {
-                0.72f + particleProgress * 0.45f
-            })
-            particlePaint.alpha = Math.round(
-                if (particleBurst) {
-                    235f * (1f - particleProgress)
-                } else {
-                    220f * (1f - particleProgress)
-                },
-            )
-            canvas.drawCircle(x, y, radius, particlePaint)
-        }
     }
 
     private fun desiredPanelWidth(): Int {

@@ -3,9 +3,8 @@ package io.github.hoerire.free.bubble
 import android.app.KeyguardManager
 import android.app.Notification
 import android.os.Bundle
-import android.os.PowerManager
 import android.service.notification.StatusBarNotification
-import android.util.Log
+import io.github.hoerire.free.config.CallNotificationGuard
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Field
@@ -113,6 +112,8 @@ internal class BubbleHeadsUpGate(
             if (!config.active || !config.previewSuppressBanner) return false
             val sbn = sbnOf(entry) ?: return false
             val notification = sbn.notification ?: return false
+            // 通话通知不进气泡，因此也不该被模块压掉横幅。
+            if (CallNotificationGuard.isCallNotification(notification)) return false
             if (isGroupSummaryOrOngoing(notification)) return false
             val identity = BubbleIdentity(sbn.packageName, sbn.userId, sbn.key)
             if (!config.accepts(identity)) return false

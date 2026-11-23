@@ -4,14 +4,10 @@ import android.content.ActivityNotFoundException
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
@@ -24,7 +20,6 @@ import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.SwipeRight
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -34,7 +29,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -47,11 +41,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.hoerire.free.BuildConfig
 import io.github.hoerire.free.R
-import io.github.hoerire.free.config.ModulePreferences
 import io.github.hoerire.free.config.OutsideTapCloseMode
 import io.github.hoerire.free.framework.FrameworkConnectionIssue
 import io.github.hoerire.free.framework.FrameworkConnectionState
@@ -65,10 +57,7 @@ import io.github.hoerire.free.update.UpdateState
 import io.github.hoerire.free.ui.component.HomeScaffold
 import io.github.hoerire.free.ui.component.PreferenceIcon
 import io.github.suqi8.coui.kmp.theme.COUITheme
-import kotlin.math.PI
-import kotlin.math.cos
 import kotlin.math.roundToInt
-import kotlin.math.sin
 
 @Composable
 internal fun ControlScreen(
@@ -385,68 +374,6 @@ internal fun CornerRangePreview(
     }
 }
 
-/**
- * 拖动「命中范围」时的实时预览：按扇形真实几何画出每个槽位的命中圆与图标圆点，
- * 让用户直接看到命中圈有多大、相邻圈是否已经连成一片。
- */
-@Composable
-internal fun HitRangePreview(
-    hitRangeDp: Int,
-    itemCount: Int,
-    leftEnabled: Boolean,
-    rightEnabled: Boolean,
-) {
-    val activeColor = COUITheme.colorScheme.primary
-    val inactiveColor = COUITheme.colorScheme.labelSecondary
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val basePixel = minOf(size.width, size.height) / RadialBaseShortEdgeDp
-        val arcRadius = RadialBaseArcRadiusDp * basePixel
-        val iconRadius = RadialBaseIconDiameterDp * basePixel / 2f
-        // 命中判定现在就是按屏幕 dp 直算（见 RadialIconGeometry），预览也按同一口径画，
-        // 所见即所得：圈内即可选中。
-        val hitRadius = hitRangeDp.dp.toPx()
-        val strokeWidth = 2.dp.toPx()
-        val dash = PathEffect.dashPathEffect(floatArrayOf(7.dp.toPx(), 5.dp.toPx()))
-        val slots = itemCount.coerceIn(1, ModulePreferences.MAX_PINNED_APPS + 1)
-        val step = RadialSpanDegrees / slots
-
-        fun drawSide(originX: Float, originY: Float, mirrored: Boolean, enabled: Boolean) {
-            val color = if (enabled) activeColor else inactiveColor
-            for (index in 0 until slots) {
-                val slot = slots - index - 1
-                val leftDegrees = -RadialSafeDegrees - (slot + 0.5f) * step
-                val degrees = if (mirrored) -180f - leftDegrees else leftDegrees
-                val radians = degrees * PI.toFloat() / 180f
-                val center =
-                    Offset(
-                        x = originX + cos(radians) * arcRadius,
-                        y = originY + sin(radians) * arcRadius,
-                    )
-                drawCircle(
-                    color = color.copy(alpha = if (enabled) 0.10f else 0.04f),
-                    radius = hitRadius,
-                    center = center,
-                )
-                drawCircle(
-                    color = color.copy(alpha = if (enabled) 0.55f else 0.22f),
-                    radius = hitRadius,
-                    center = center,
-                    style = Stroke(width = strokeWidth, pathEffect = dash),
-                )
-                drawCircle(
-                    color = color.copy(alpha = if (enabled) 0.85f else 0.30f),
-                    radius = iconRadius,
-                    center = center,
-                )
-            }
-        }
-
-        drawSide(originX = 0f, originY = size.height, mirrored = false, enabled = leftEnabled)
-        drawSide(originX = size.width, originY = size.height, mirrored = true, enabled = rightEnabled)
-    }
-}
-
-/** 关于分组：一张卡两行，版本进二级页，交流反馈直接跳转。 */
 @Composable
 private fun AboutCard(onNavigateToAbout: () -> Unit) {
     val uriHandler = LocalUriHandler.current
@@ -519,74 +446,5 @@ internal const val UPSTREAM_REPO_URL = "https://github.com/Mangi-11/Flyna"
 /** 交流反馈：QQ 群邀请链接，点击后交给系统/QQ 打开。 */
 internal const val FEEDBACK_GROUP_URL = "https://qm.qq.com/q/OrRJTQDcsw"
 
-private const val RadialBaseShortEdgeDp = 400f
-private const val RadialBaseArcRadiusDp = 242f
-private const val RadialBaseIconDiameterDp = 44f
-private const val RadialSpanDegrees = 84f
-private const val RadialSafeDegrees = 3f
-
 internal val ScreenHorizontalMargin = 12.dp
 internal val ScreenContentMaxWidth = 600.dp
-private val CardSpacing = 12.dp
-
-/**
- * 拖动「图标大小」时的实时预览：按扇形真实几何画出槽位圆点与「更多」圆盘，
- * 用来确认主题图标与溢出按钮是否对齐。
- */
-@Composable
-internal fun IconSizePreview(
-    iconSizeDp: Int,
-    itemCount: Int,
-    leftEnabled: Boolean,
-    rightEnabled: Boolean,
-) {
-    val activeColor = COUITheme.colorScheme.primary
-    val inactiveColor = COUITheme.colorScheme.labelSecondary
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val basePixel = minOf(size.width, size.height) / RadialBaseShortEdgeDp
-        // 与 RadialIconGeometry 一致：图标变大时半径同比外推。
-        val arcRadius =
-            (RadialBaseArcRadiusDp + (iconSizeDp - RadialBaseIconDiameterDp) / 2f) * basePixel
-        val iconRadius = iconSizeDp * basePixel / 2f
-        val slots = itemCount.coerceIn(1, ModulePreferences.MAX_PINNED_APPS + 1)
-        val step = RadialSpanDegrees / slots
-        val strokeWidth = 2.dp.toPx()
-        val dash = PathEffect.dashPathEffect(floatArrayOf(7.dp.toPx(), 5.dp.toPx()))
-
-        fun drawSide(originX: Float, originY: Float, mirrored: Boolean, enabled: Boolean) {
-            val color = if (enabled) activeColor else inactiveColor
-            for (index in 0 until slots) {
-                val slot = slots - index - 1
-                val leftDegrees = -RadialSafeDegrees - (slot + 0.5f) * step
-                val degrees = if (mirrored) -180f - leftDegrees else leftDegrees
-                val radians = degrees * PI.toFloat() / 180f
-                val center =
-                    Offset(
-                        x = originX + cos(radians) * arcRadius,
-                        y = originY + sin(radians) * arcRadius,
-                    )
-                drawCircle(
-                    color = color.copy(alpha = if (enabled) 0.14f else 0.05f),
-                    radius = iconRadius,
-                    center = center,
-                )
-                drawCircle(
-                    color = color.copy(alpha = if (enabled) 0.65f else 0.25f),
-                    radius = iconRadius,
-                    center = center,
-                    style = Stroke(width = strokeWidth, pathEffect = dash),
-                )
-                // 最后一格是「更多」：按可见占比画，和应用图标对齐后的观感一致。
-                val isMoreSlot = slot == slots - 1
-                drawCircle(
-                    color = color.copy(alpha = if (enabled) 0.85f else 0.30f),
-                    radius = iconRadius * (if (isMoreSlot) 0.92f else 1f),
-                    center = center,
-                )
-            }
-        }
-
-        drawSide(originX = 0f, originY = size.height, mirrored = false, enabled = leftEnabled)
-        drawSide(originX = size.width, originY = size.height, mirrored = true, enabled = rightEnabled)
-    }
-}

@@ -132,8 +132,8 @@ internal class CornerGestureEngine {
                 return GestureAction.PassThrough
             }
             // 反过来，几乎水平的内向滑动也不是角区手势：视频进度条、横向滑动的列表
-            // 就压在触发范围内，拖动时 upward≈0 而 inward 很大。以前只挡了"过于垂直"，
-            // 这种"几乎水平"会被当成斜推，抢流之后进度条就拖不动了。
+            // 就压在触发范围内，拖动时 upward≈0 而 inward 很大。只挡「过于垂直」不够，
+            // 这种「几乎水平」会被当成斜推，抢流之后进度条就拖不动了。
             if (upward < inward * MIN_UPWARD_RATIO) {
                 return GestureAction.PassThrough
             }

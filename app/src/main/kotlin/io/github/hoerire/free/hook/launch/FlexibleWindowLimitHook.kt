@@ -202,13 +202,6 @@ internal class FlexibleWindowLimitHook(
     }
 
     /**
-     * ColorOS 17 的全屏占位补偿。
-     *
-     * 17 的计数把当前全屏应用也算进可见窗口（系统日志里 allVisibleWindowSize = flexibleTasks +
-     * fullScreenList），于是用户把上限设成 1 时，底下压着一个全屏应用再挂一个小窗就会被判超限、
-     * 立刻收掉。这里在 17 上统一 +1 抵消那一个占位，16 上计数不含全屏，维持原值不动。
-     */
-    /**
      * 上限类 getter：无参、返回 int、名字里带 max 且带 num/count。
      *
      * 排除宽高尺寸类（MAX_FLEXIBLE_TASK_WIDTH 那种），避免误改绘制参数。

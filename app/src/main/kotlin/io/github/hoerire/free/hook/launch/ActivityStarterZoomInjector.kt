@@ -11,6 +11,7 @@ import io.github.libxposed.api.XposedModule
 import io.github.hoerire.free.hook.ProcessConfiguration
 import io.github.hoerire.free.log.ModuleLog
 import io.github.hoerire.free.log.VerboseLog
+import io.github.hoerire.free.config.CallNotificationGuard
 import io.github.hoerire.free.config.ModulePreferences
 import io.github.hoerire.free.platform.coloros.ColorOsFreeformRuntime
 import io.github.hoerire.free.hook.OemReflection
@@ -81,13 +82,6 @@ internal class ActivityStarterZoomInjector(
         io.github.hoerire.free.log.ModuleLog.info("ZOOM_STARTER_HOOK_INSTALLED_" + installedHooks, null)
     }
 
-    /**
-     * 通知点击改由系统 zoom 入口启动。
-     *
-     * 通知点击经 PendingIntent 下发，SystemUI 不提供过渡动画适配器，
-     * 只补 options 会出现窗口延迟出现且无动画。此处直接调用系统 zoom 入口，
-     * 与扇形菜单使用同一启动路径，获得完整过渡效果。
-     */
     /** 上一次注入的目标与时刻，用于识别「目标应用用中转页二次发起同一目标」的退化情形。 */
     @Volatile
     private var lastInjectTarget: String? = null
@@ -179,6 +173,11 @@ internal class ActivityStarterZoomInjector(
                     ModuleLog.debug(TAG) { "ZOOM_SKIP_PREEMPT_NO_INTENT_" + stage }
                     return false
                 }
+        // 通话界面保持全屏：来电接听不能落进小窗。
+        if (CallNotificationGuard.isCallActivity(intent)) {
+            ModuleLog.debug(TAG) { "ZOOM_SKIP_CALL_ACTIVITY_" + stage }
+            return false
+        }
         // 模块自己代发的启动（更多面板里的快捷方式）显式要求保持全屏：
         // 按组件去猜会误伤真正该开小窗的应用启动，只有发起方自己知道这次是不是快捷方式。
         if (intent.getBooleanExtra(ModulePreferences.EXTRA_SKIP_ZOOM, false)) {
@@ -456,6 +455,11 @@ internal class ActivityStarterZoomInjector(
                     ModuleLog.debug(TAG) { "ZOOM_SKIP_NO_INTENT" }
                     return
                 }
+        // 通话界面不补小窗参数：来电/去电都保持系统默认的全屏通话界面。
+        if (CallNotificationGuard.isCallActivity(intent)) {
+            ModuleLog.debug(TAG) { "ZOOM_SKIP_CALL_ACTIVITY_INJECT" }
+            return
+        }
         val originalOptions = optionsBundle(starter, request)
         if (intent.getIntExtra(ZoomLaunchSpec.EXTRA_APPLIED, 0) == 1) {
             val label = intent.component?.packageName ?: intent.getPackage()
@@ -565,6 +569,20 @@ internal class ActivityStarterZoomInjector(
     }
 
     /**
+     * 是否为控制中心发起的启动（磁贴、快捷入口）。
+     *
+     * 系统给这类启动带 `start_from_systemui_qs`；个别入口只带 quicksettings / QS_TILE 形态的
+     * action，所以两者都认。判定必须先于「通知点击」：磁贴长按同样会携带 PendingIntent，
+     * 只按 pi 分类会把控制中心的启动算到通知中心开关下。
+     */
+    private fun isControlCenterLaunch(intent: Intent): Boolean {
+        if (intent.getBooleanExtra(EXTRA_QUICK_SETTINGS, false)) return true
+        val action = intent.action.orEmpty()
+        return action.contains("quicksettings", ignoreCase = true) ||
+            action.contains("QS_TILE", ignoreCase = true)
+    }
+
+    /**
      * 返回命中的场景标识；不满足条件时返回 null，启动交由系统处理。
      *
      * 判定按以下顺序进行，先命中先返回：
@@ -584,20 +602,6 @@ internal class ActivityStarterZoomInjector(
      * 顺序不可随意调整：通知点击与文件选择都携带 resultTo，若排在其后会先被
      * 应用跳转分支命中；控制中心的判定依赖发起方信息，必须晚于前两者。
      */
-    /**
-     * 是否为控制中心发起的启动（磁贴、快捷入口）。
-     *
-     * 系统给这类启动带 `start_from_systemui_qs`；个别入口只带 quicksettings / QS_TILE 形态的
-     * action，所以两者都认。判定必须先于「通知点击」：磁贴长按同样会携带 PendingIntent，
-     * 只按 pi 分类会把控制中心的启动算到通知中心开关下。
-     */
-    private fun isControlCenterLaunch(intent: Intent): Boolean {
-        if (intent.getBooleanExtra(EXTRA_QUICK_SETTINGS, false)) return true
-        val action = intent.action.orEmpty()
-        return action.contains("quicksettings", ignoreCase = true) ||
-            action.contains("QS_TILE", ignoreCase = true)
-    }
-
     private fun reasonFor(
         intent: Intent,
         callingUid: Int,

@@ -33,7 +33,7 @@ internal object RadialIconGeometry {
     private const val SELECTION_KEEP_RADIUS_PX = 0f
 
     /**
-     * [hitRadiusDp] 是设置页「命中范围」的物理 dp 值（40..140），为空时回落到
+     * [hitRadiusDp] 是设置页「命中范围」的物理 dp 值（40..220），为空时回落到
      * [SELECTION_ENTER_FACTOR] 倍图标直径的缺省口径。
      *
      * 命中半径换算用 [unit]（随窗口缩放后的每 dp 像素数）而不是原始 density：

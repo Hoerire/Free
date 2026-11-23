@@ -31,9 +31,6 @@ internal class FrameworkConnectionRepository(private val context: Context) {
     private val pendingServices = IdentityHashMap<XposedService, Unit>()
     private val unavailableServices = IdentityHashMap<XposedService, FrameworkConnectionState>()
     private var activeConnection: ActiveConnection? = null
-    /** 常驻设置通道；框架服务只在安装后投递一次，进程重启后不可用，因此以本通道为主。 */
-    private var bridge: SettingsBridgeClient? = null
-    private var bridgeRetries = 0
 
     private val mutableState = MutableStateFlow(FrameworkConnectionState())
     val state: StateFlow<FrameworkConnectionState> = mutableState.asStateFlow()
@@ -52,13 +49,6 @@ internal class FrameworkConnectionRepository(private val context: Context) {
     fun start() {
         check(started.compareAndSet(false, true)) { "Xposed Service listener is already registered" }
         XposedServiceHelper.registerListener(serviceListener)
-        // 先走常驻通道：进程重启后框架不会再投递服务，这条路才是常态。
-    }
-
-    /** 回到前台时若仍未连上，再试一次通道：进程可能早于系统进程就绪。 */
-    fun retryIfNeeded() {
-        if (!started.get() || bridge != null) return
-        bridgeRetries = 0
     }
 
     fun setModuleEnabled(enabled: Boolean) =
@@ -117,6 +107,9 @@ internal class FrameworkConnectionRepository(private val context: Context) {
     fun setHandleSwipeUpToMiniEnabled(enabled: Boolean) =
         updateSettings { it.copy(handleSwipeUpToMiniEnabled = enabled) }
 
+    fun setExternalHandleEnabled(enabled: Boolean) =
+        updateSettings { it.copy(externalHandleEnabled = enabled) }
+
     fun setPauseInLandscape(enabled: Boolean) =
         updateSettings { it.copy(pauseInLandscape = enabled) }
 
@@ -137,7 +130,6 @@ internal class FrameworkConnectionRepository(private val context: Context) {
     fun setRadialInteractionEnabled(enabled: Boolean) =
         updateSettings { it.copy(radialInteractionEnabled = enabled) }
 
-    /** 选中光圈：滑选条目时是否绘制白色高亮圈。 */
     /** 流光特效：选中项外沿的动效，与「选中光圈」互相独立。 */
     fun setRadialShimmerEnabled(enabled: Boolean) =
         updateSettings { it.copy(radialShimmerEnabled = enabled) }
@@ -301,101 +293,8 @@ internal class FrameworkConnectionRepository(private val context: Context) {
         }
     }
 
-    /** 建立常驻通道并取一次权威快照；不可用时保持未连接，等待框架服务（安装后仅一次）。 */
-    private fun activateBridge() {
-        if (bridge != null) return
-        val client = SettingsBridgeClient(context)
-        if (!client.start()) {
-            scheduleBridgeRetry()
-            return
-        }
-        val reply = client.request()
-        if (reply == null) {
-            client.close()
-            scheduleBridgeRetry()
-            return
-        }
-        connectBridge(client, reply)
-    }
-
-    /**
-     * 常驻重试：模块可能晚于应用就绪（开机早期、系统进程重启）。
-     * 按固定间隔补试，连上为止；用户不需要反复开关应用。
-     */
-    private fun scheduleBridgeRetry() {
-        if (bridge != null || bridgeRetries >= MAX_BRIDGE_RETRIES) return
-        bridgeRetries++
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
-            { worker.execute { if (bridge == null) activateBridge() } },
-            BRIDGE_RETRY_INTERVAL_MS,
-        )
-    }
-
-    private fun connectBridge(client: SettingsBridgeClient, reply: SettingsBridgeClient.Reply) {
-        val settings =
-            try {
-                SettingsBridge.decode(reply.settings)
-            } catch (_: RuntimeException) {
-                client.close()
-                return
-            }
-        bridge = client
-        bridgeRetries = 0
-        mutableState.value =
-            FrameworkConnectionState(
-                status = FrameworkConnectionStatus.Connected,
-                frameworkName = reply.frameworkName,
-                frameworkVersion = reply.frameworkVersion,
-                apiVersion = reply.apiVersion,
-                settings = settings,
-                // 通道可用即代表模块已加载在系统进程内；其余作用域由框架自身管理。
-                grantedScopes = FrameworkConnectionState.REQUIRED_SCOPES,
-            )
-    }
-
-    /** 经常驻通道写入：先乐观上屏，再用回执校正，写失败才回退。 */
-    private fun updateViaBridge(
-        client: SettingsBridgeClient,
-        transform: (ModuleSettingsSnapshot) -> ModuleSettingsSnapshot,
-    ) {
-        val previous = mutableState.value
-        if (previous.status != FrameworkConnectionStatus.Connected) return
-        val next = transform(previous.settings)
-        if (next == previous.settings) return
-        // 开关按下即生效：等待落盘期间界面不再停留在旧值，否则会被读成“点了没反应”。
-        mutableState.value = previous.copy(settings = next, isUpdating = true, issue = null)
-        val reply = client.push(SettingsBridge.encode(next))
-        if (reply == null) {
-            bridge = null
-            client.close()
-            mutableState.value =
-                FrameworkConnectionState(
-                    status = FrameworkConnectionStatus.Waiting,
-                    frameworkName = previous.frameworkName,
-                    frameworkVersion = previous.frameworkVersion,
-                    apiVersion = previous.apiVersion,
-                    settings = previous.settings,
-                )
-            scheduleBridgeRetry()
-            return
-        }
-        val applied =
-            try {
-                SettingsBridge.decode(reply.settings)
-            } catch (_: RuntimeException) {
-                next
-            }
-        mutableState.value = previous.copy(settings = applied, isUpdating = false, issue = null)
-        notifySettingsChanged(applied)
-    }
-
     private fun updateSettings(transform: (ModuleSettingsSnapshot) -> ModuleSettingsSnapshot) {
         worker.execute {
-            val channel = bridge
-            if (channel != null) {
-                updateViaBridge(channel, transform)
-                return@execute
-            }
             val connection = activeConnection ?: return@execute
             val previous = mutableState.value
             if (!previous.canChangeSettings) return@execute
@@ -457,7 +356,6 @@ internal class FrameworkConnectionRepository(private val context: Context) {
     }
 
     private fun handleServiceBind(service: XposedService) {
-        if (bridge != null) return
         if (diedBeforeBind.remove(service) != null) return
         if (liveServices.put(service, Unit) != null) return
         pendingServices[service] = Unit
@@ -465,7 +363,6 @@ internal class FrameworkConnectionRepository(private val context: Context) {
     }
 
     private fun handleServiceDied(service: XposedService) {
-        if (bridge != null) return
         if (liveServices.remove(service) == null) {
             diedBeforeBind[service] = Unit
             return
@@ -679,10 +576,6 @@ internal class FrameworkConnectionRepository(private val context: Context) {
     }
 
     private companion object {
-        const val BRIDGE_RETRY_INTERVAL_MS = 2_000L
-        /** 最多补试一分钟：再久说明模块没在运行，等下次进入页面再试。 */
-        const val MAX_BRIDGE_RETRIES = 30
-
         const val WORKER_THREAD_NAME = "Free-Service"
         const val MAX_METADATA_LENGTH = 80
     }

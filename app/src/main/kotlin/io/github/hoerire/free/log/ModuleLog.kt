@@ -75,8 +75,8 @@ internal object ModuleLog {
     /**
      * 转交框架日志级别的一步（INFO 算安装成功，WARN 及以上算失败并保留细节）。
      *
-     * 各 Hook 安装器原先直接调 `module.log(...)`，会绕过「详细日志」开关；
-     * 统一走这里之后，关闭详细日志时只剩安装汇总与失败项。
+     * 安装器统一走这里而不是直接调 `module.log(...)`：后者会绕过「详细日志」开关，
+     * 关闭详细日志时只剩安装汇总与失败项。
      */
     fun forward(priority: Int, code: String, throwable: Throwable? = null) {
         if (throwable != null || priority >= Log.WARN) {

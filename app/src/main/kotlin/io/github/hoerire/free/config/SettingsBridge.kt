@@ -3,24 +3,14 @@ package io.github.hoerire.free.config
 import android.content.SharedPreferences
 
 /**
- * 模块应用与 hook 进程之间的设置通道协议。
+ * 设置快照的跨进程编解码。
  *
- * 框架服务只在模块安装或升级后的首次进程启动时投递，进程重启后不再投递，因此设置读写
- * 不依赖该服务，改走常驻广播通道：模块应用把整份快照推给 system_server，
- * system_server 落盘并发回权威快照。
+ * 模块应用改完设置后经 [ModulePreferences.ACTION_PINNED_TARGETS_CHANGED] 把整份快照
+ * 直接推给各作用域进程，接收方用本对象还原成 [ModuleSettingsSnapshot] 覆盖内存快照。
+ * 载荷只走广播 extras，没有落盘与回执。
  */
 internal object SettingsBridge {
     const val EXTRA_SETTINGS_MAP = "settings_map"
-    const val EXTRA_FRAMEWORK_NAME = "framework_name"
-    const val EXTRA_FRAMEWORK_VERSION = "framework_version"
-    const val EXTRA_API_VERSION = "api_version"
-    /** 是否真的落盘：纯回执字段，App 据此决定保留乐观值还是回退。 */
-    const val EXTRA_WRITE_OK = "write_ok"
-    /** 请求序号：回执必须与最近一次请求一致，迟到的旧回执不能覆盖当前状态。 */
-    const val EXTRA_REQUEST_ID = "request_id"
-
-    /** 等待 system_server 回执的上限；超时按未连接处理。 */
-    const val TIMEOUT_MS = 1500L
 
     fun encode(snapshot: ModuleSettingsSnapshot): HashMap<String, Any?> {
         val map = HashMap<String, Any?>()
@@ -34,32 +24,6 @@ internal object SettingsBridge {
     fun putMap(bundle: android.os.Bundle, map: Map<String, Any?>) {
         bundle.putSerializable(EXTRA_SETTINGS_MAP, HashMap(map))
     }
-
-    /** 落盘载体：整份快照编成字节，跨进程与重启都还原成同一张表。 */
-    fun encodeBytes(map: Map<String, Any?>): ByteArray? =
-        try {
-            val bundle = android.os.Bundle()
-            putMap(bundle, map)
-            val parcel = android.os.Parcel.obtain()
-            bundle.writeToParcel(parcel, 0)
-            val bytes = parcel.marshall()
-            parcel.recycle()
-            bytes
-        } catch (_: RuntimeException) {
-            null
-        }
-
-    fun decodeBytes(bytes: ByteArray): Map<String, Any?>? =
-        try {
-            val parcel = android.os.Parcel.obtain()
-            parcel.unmarshall(bytes, 0, bytes.size)
-            parcel.setDataPosition(0)
-            val bundle = android.os.Bundle.CREATOR.createFromParcel(parcel)
-            parcel.recycle()
-            readMap(bundle)
-        } catch (_: RuntimeException) {
-            null
-        }
 
     @Suppress("UNCHECKED_CAST")
     fun readMap(bundle: android.os.Bundle?): Map<String, Any?>? =

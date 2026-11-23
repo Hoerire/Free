@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.PixelFormat
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
@@ -24,11 +25,25 @@ import android.view.WindowManager
 internal class CornerTouchRegionView(
     context: Context,
     private val onTouch: (event: MotionEvent, screenOffsetY: Int) -> Unit,
+    /** 收到返回键：返回 true 表示已经处理（宿主收起菜单）。 */
+    private val onBackPressed: () -> Boolean = { false },
 ) : View(context) {
     var screenOffsetY: Int = 0
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         onTouch(event, screenOffsetY)
+        return true
+    }
+
+    /**
+     * 返回键：只有「保持挂起」时这个窗口才是可聚焦的，键盘事件也只在这种状态下才会送到这里。
+     *
+     * ACTION_DOWN 先吞掉，抬手时再真正处理一次，避免一次按键触发两次收起；
+     * 与「更多」面板（[io.github.hoerire.free.platform.coloros.ColorOsAllAppsWindow]）同一套写法。
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode != KeyEvent.KEYCODE_BACK) return super.dispatchKeyEvent(event)
+        if (event.action == KeyEvent.ACTION_UP) return onBackPressed()
         return true
     }
 
@@ -49,14 +64,19 @@ internal class CornerTouchRegionView(
             context: Context,
             type: Int,
             gestureInsetPx: Int,
+            focusable: Boolean = false,
         ): WindowManager.LayoutParams {
             val metrics = context.resources.displayMetrics
             val height = (metrics.heightPixels - gestureInsetPx).coerceAtLeast(1)
+            // 可聚焦的窗口才收得到按键：保持挂起时返回键必须能把菜单收起，
+            // 手势进行中则保持不可聚焦——那时手指还按着，抢焦点会打断正在用的输入法。
+            val focusFlags =
+                if (focusable) 0 else WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
             return WindowManager.LayoutParams(
                 metrics.widthPixels,
                 height,
                 type,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                focusFlags or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,

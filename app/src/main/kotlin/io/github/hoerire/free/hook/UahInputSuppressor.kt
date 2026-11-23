@@ -1,6 +1,5 @@
 package io.github.hoerire.free.hook
 
-import android.util.Log
 import io.github.hoerire.free.log.VerboseLog
 import android.view.InputDevice
 import android.view.MotionEvent

@@ -1,7 +1,6 @@
 package io.github.hoerire.free.hook
 
 import android.annotation.SuppressLint
-import android.util.Log
 import io.github.hoerire.free.log.ModuleLog
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
@@ -11,9 +10,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal class SystemServerHookInstaller(
     private val module: XposedModule,
     private val configuration: ProcessConfiguration,
-    private val frameworkName: String,
-    private val frameworkVersion: String,
-    private val apiVersion: Int,
 ) {
     private val bound = AtomicBoolean(false)
     private val interAppTracker = io.github.hoerire.free.hook.launch.InterAppLaunchTracker()
@@ -33,6 +29,8 @@ internal class SystemServerHookInstaller(
         // 触发延迟：把设置里的长按阈值写进系统设置，供应用侧的拖拽判定使用。
         LongPressTimeoutHook.install(configuration)
         HandleSwipeUpHookInstaller(module, configuration, environment).install(classLoader)
+        // 沉浸式隐藏指示条（小窗交互 → 沉浸式隐藏指示条）：只调系统自身的显隐入口，不建视图、不改布局参数。
+        ExternalHandleHookInstaller(module, configuration).install(classLoader)
         io.github.hoerire.free.hook.launch.ActivityStarterZoomInjector(
             module,
             configuration,
@@ -104,8 +102,6 @@ internal class SystemServerHookInstaller(
                                 ModuleLog.forward(priority, code, throwable)
                             },
                         ).start()
-                        // 设置不再走文件/广播桥：完全按 2.2，只有 LSPosed 远程偏好 + 变更广播。
-                        ModuleLog.info("SETTINGS_FILE_BRIDGE_REMOVED")
                     }
                     result
                 }
@@ -117,38 +113,6 @@ internal class SystemServerHookInstaller(
         }
     }
 
-
-    /**
-     * 设置通道必须等 system_server 里出现真实的 Context 才能注册接收器；
-     * `FlexibleTaskController` 持有的 mContext 是系统进程里最稳的一处来源。
-     */
-    private fun installSettingsBridge(controller: Any) {
-        ModuleLog.info("SETTINGS_BRIDGE_INSTALL_BEGIN")
-        try {
-            val context =
-                OemReflection.readField(controller, "mContext") as? android.content.Context
-            if (context == null) {
-                ModuleLog.warn("SETTINGS_BRIDGE_NO_CONTEXT", null)
-                return
-            }
-            SystemServerSettingsBridge(
-                context = context,
-                configuration = configuration,
-                frameworkName = frameworkName,
-                frameworkVersion = frameworkVersion,
-                apiVersion = apiVersion,
-                logger = { priority, code, throwable ->
-                    ModuleLog.forward(priority, code, throwable)
-                },
-            ).start()
-        } catch (throwable: Throwable) {
-            // 通道装不上会直接表现为设置页永远“等待连接”，必须留下原因。
-            ModuleLog.warn(
-                "SETTINGS_BRIDGE_INSTALL_FAILED_" + throwable.javaClass.simpleName,
-                throwable as? RuntimeException,
-            )
-        }
-    }
 
     private fun installForegroundObserver(classLoader: ClassLoader) {
         try {

@@ -1,27 +1,19 @@
-# 编译期依赖：`libs/` 下的三个 jar
+# 编译期依赖：`libs/hidden-stubs.jar`
 
-`libs/` 里的 jar 只参与编译，**不进 dex、不进 APK**（`build.gradle.kts` 里是 `compileOnly`）。
-原因是这些类（`androidx.preference.*`、`androidx.fragment.*`、以及 framework 隐藏类）
-在设备上由系统设置 APK 与 bootclasspath 提供；打进 APK 会与运行时的真实类同名，导致类加载失败。
+`libs/` 里只剩一个 jar：`hidden-stubs.jar`，它只参与编译，**不进 dex、不进 APK**
+（`build.gradle.kts` 里是 `compileOnly`）。原因是它占位的类（`android.view.InputChannel`、
+`InputEventReceiver` 等 framework 隐藏 API）在设备上由 bootclasspath 提供；打进 APK 会与
+运行时的真实类同名，导致类加载失败。
 
-| 文件 | 来源 | 是否入库 |
-|---|---|---|
-| `libs/hidden-stubs.jar` | 本仓库内维护的最小化占位（`InputChannel` / `InputEventReceiver` 等隐藏 API） | 是 |
-| `libs/preference-classes.jar` | AndroidX `androidx.preference` 的 `classes.jar` | 否，需本地生成 |
-| `libs/fragment-classes.jar` | AndroidX `androidx.fragment` 的 `classes.jar` | 否，需本地生成 |
+AndroidX 的 `preference` / `fragment` 两个 jar 曾经也需要：系统设置页由模块自己的
+`PreferenceFragmentCompat` 子类渲染。该页面已经移除（设置界面完全改由模块 App 的 Compose 实现，
+系统设置里只保留一条跳转入口），因此这两个 jar 不再需要，构建也不再依赖它们。
 
-后两个体积较大（约 170 KB + 330 KB）且每次 AAR 升级都会变，因此不入库；
-**缺少它们时 `:app:assembleRelease` 会编译失败**（`Cannot resolve symbol` / 找不到类）。
+## 历史：那两个 jar 怎么来的（现已不需要）
 
-## 生成方式
-
-需要一次网络访问（Google Maven），之后完全离线。版本号只需包含用到的类即可，
-API 自 1.2 / 1.0 起未变动，因此固定为下面的稳定版就够用：
+需要时从 Google Maven 取 AAR、解出 `classes.jar` 即可：
 
 ```sh
-# 在仓库根目录执行
-mkdir -p libs
-
 curl -sL -o /tmp/preference.aar \
   https://dl.google.com/android/maven2/androidx/preference/preference/1.2.1/preference-1.2.1.aar
 unzip -p /tmp/preference.aar classes.jar > libs/preference-classes.jar
@@ -29,25 +21,12 @@ unzip -p /tmp/preference.aar classes.jar > libs/preference-classes.jar
 curl -sL -o /tmp/fragment.aar \
   https://dl.google.com/android/maven2/androidx/fragment/fragment/1.8.9/fragment-1.8.9.aar
 unzip -p /tmp/fragment.aar classes.jar > libs/fragment-classes.jar
-
-ls -l libs   # hidden-stubs.jar 应已存在；另两个是新生成的
 ```
 
-校验（两个 jar 都不应为空，且能列出目标包）：
-
-```sh
-unzip -l libs/preference-classes.jar | grep -q 'androidx/preference/PreferenceFragmentCompat.class' && echo ok
-unzip -l libs/fragment-classes.jar    | grep -q 'androidx/fragment/app/Fragment.class' && echo ok
-```
-
-## CI
-
-`.github/workflows/build.yml` 在构建前会自动执行上面的生成命令，仓库本身不含这两个 jar；
-本地构建则需要先跑一次本节步骤。
+**不要**把这类产物提交进仓库：体积大、随 AAR 版本变化，且一旦有人把 `compileOnly` 改成
+`implementation`，APK 里就会出现与系统重名的类。
 
 ## 注意事项
 
-- 生成物**不要用 `git add -f`** 提交：`.gitignore` 已显式忽略这两个文件名，仓库保持轻量。
-- 代码里对它们的引用必须保持 `compileOnly`；改成 `implementation` 会让 APK 里出现重复类。
-- 设备系统设置 APK 里的 `androidx.preference` 版本与本地产物不一致时，优先按设备的类签名调整：
-  缺少类或方法会在运行期表现为 `NoSuchMethodError`，用 dex 反编译工具查看系统 APK 的实际签名，换对应版本重新生成。
+- 引用 `hidden-stubs.jar` 里的类必须保持 `compileOnly`；改成 `implementation` 会让 APK 里出现重复类。
+- 若将来又要 hook 系统设置页的偏好树，需要重新引入上面那两个 jar，并在 CI 里补回生成步骤。

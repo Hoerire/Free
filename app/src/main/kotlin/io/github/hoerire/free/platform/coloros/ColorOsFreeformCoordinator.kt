@@ -221,7 +221,6 @@ internal class ColorOsFreeformCoordinator(
     /** 只负责接触摸的小窗口；主窗口 FLAG_NOT_TOUCHABLE，点选靠它。 */
     private var touchRegion: CornerTouchRegionView? = null
     private var overlay: CornerRadialOverlayView? = null
-    private var morePanelActive = false
     private var lastSettings = ModuleSettingsSnapshot(enabled = false)
     private var activeEnvironmentApproved = false
     private var activeGestureConfig: CornerGestureConfig? = null
@@ -638,7 +637,6 @@ internal class ColorOsFreeformCoordinator(
     private var pilferDownX = 0f
     private var pilferDownY = 0f
     /** 本次抢流时手指累计位移（像素），仅用于诊断输出。 */
-    private var pilferDistance = 0f
 
     /** 抢流即激活：抢流成功那刻的手势方向与原始落点，重发 DOWN 时消费。 */
     private var pilferActivateSide: CornerSide? = null
@@ -705,7 +703,6 @@ internal class ColorOsFreeformCoordinator(
                     // 否则会出现「扇形激活但流没被抢」的穿透。
                     if (upward < inward * CornerGestureEngine.MIN_UPWARD_RATIO) return false
                     // 诊断：抢流这一刻手指已经移动了多远。数值大说明应用在抢流前就收到了足够的位移。
-                    pilferDistance = moved
                     logFirstPilfer(moved)
                     // 抢流即激活：抢流判定已确认这是角区斜推手势（非上滑方向），
                     // 记下方向与原始落点，等重发 DOWN 到达 UI 引擎时直接进入 Revealing，
@@ -1004,7 +1001,6 @@ internal class ColorOsFreeformCoordinator(
             sidebar.cancel()
             debug("SYSTEM_MORE_PANEL_CLOSED_BY_OVERLAY")
         }
-        morePanelActive = false
         overlayAtLeft = side == io.github.hoerire.free.gesture.CornerSide.Left
 
         val hitRangeDp = lastSettings.radialHitRangeDp
@@ -1265,7 +1261,7 @@ internal class ColorOsFreeformCoordinator(
         }
         val form = windowFormOf(tasks, target.packageName)
         // 目标已经是一个可见的小窗：扇形再点它 → 切成迷你窗
-        // （等于在小窗底部横条上快速上滑）。以前这里什么都不做，表现为"点了没反应"。
+        // （等于在小窗底部横条上快速上滑）。不处理会让这一下「点了没反应」。
         if (form == WindowForm.VisibleWindow) {
             val zoomTask = visibleOrdinaryZoomTaskOf(tasks, target.packageName)
             if (zoomTask != null && switchTaskToMini(zoomTask)) {
@@ -1353,7 +1349,6 @@ internal class ColorOsFreeformCoordinator(
             return
         }
         val view = overlay ?: return
-        morePanelActive = true
         activeEnvironmentApproved = false
         gestureEngine.cancel()
         sidebar.open(
@@ -1590,11 +1585,31 @@ internal class ColorOsFreeformCoordinator(
         detachTouchRegion()
         val metrics = context.resources.displayMetrics
         val inset = bottomGestureInsetPx(metrics)
-        val params = CornerTouchRegionView.layoutParams(context, overlayWindowType, inset)
+        // 保持挂起时菜单会停在屏幕上，要让返回键能收起它：此时窗口才可聚焦，
+        // 否则按键事件根本不会投递到这个窗口，Back 会直接落到下层应用。
+        val focusable = overlay?.isKeepOpen() == true
+        val params =
+            CornerTouchRegionView.layoutParams(
+                context = context,
+                type = overlayWindowType,
+                gestureInsetPx = inset,
+                focusable = focusable,
+            )
         val view =
-            CornerTouchRegionView(context) { event, offsetY ->
-                handleTouchRegionEvent(event, offsetY)
-            }
+            CornerTouchRegionView(
+                context = context,
+                onTouch = { event, offsetY -> handleTouchRegionEvent(event, offsetY) },
+                onBackPressed = {
+                    if (overlay == null) {
+                        false
+                    } else {
+                        trace("SYSTEM_OVERLAY_BACK_KEY")
+                        // 与点空白关闭走同一条收场路径：取消手势、清抢流会话、移除窗口。
+                        cancelActiveGesture()
+                        true
+                    }
+                },
+            )
         // 窗口贴顶摆放，屏幕坐标偏移为 0。
         view.screenOffsetY = 0
         try {
@@ -1808,7 +1823,6 @@ internal class ColorOsFreeformCoordinator(
         pendingOverlayBlurPx = 0
         overlayParams = null
         if (sidebar.isPending) sidebar.cancel()
-        morePanelActive = false
         trace("SYSTEM_OVERLAY_REMOVE")
         val cleanupFailure = view.disposeOverlay()
         try {
@@ -1836,7 +1850,6 @@ internal class ColorOsFreeformCoordinator(
         environmentState.isGestureAllowed() &&
             !(lastSettings.pauseInKeyboard && isInputMethodVisible())
 
-    /** 输入法窗口此刻是否可见；状态拿不到时按「不可见」处理，避免误拦手势。 */
     /**
      * 浮层该挂哪一层。
      *
@@ -1951,14 +1964,6 @@ internal class ColorOsFreeformCoordinator(
     } catch (_: ReflectiveOperationException) { null }
       catch (_: RuntimeException) { null }
 
-    /**
-     * 该包此刻是否有可见窗口；有就把它提到前台，不重新启动。
-     *
-     * 判据是「可见」，不是「任务存在」：收窗只是把任务退到后台，任务对象仍在任务树里，
-     * 按任务存在判定会让被收过窗的应用永远打不开。有可见窗口时重新启动，会被系统
-     * 原地改写成小窗且没有动画（getReusableOptionsForFreeForm），所以只做前置；
-     * 没有可见窗口（应用在后台、或刚被收窗）时返回 false，调用方按正常小窗启动。
-     */
     /**
      * 该包此刻在屏幕上的状态，供 FanLaunchPolicy 判断。
      *
@@ -2614,10 +2619,6 @@ internal class ColorOsFreeformCoordinator(
          */
         const val SESSION_GAP_MS = 800L
 
-        /**
-         * 判定"这是系统上滑不是角区手势"的比值：upward 超过 inward 这么多倍就放弃抢流。
-         * 垂直上滑要留给系统回桌面，抢了会让上滑失效。
-         */
         /**
          * upward / inward 超过这个比值就按「垂直上滑」处理，这一帧不抢流。
          *

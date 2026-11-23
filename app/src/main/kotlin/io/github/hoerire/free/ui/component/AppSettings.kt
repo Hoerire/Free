@@ -4,21 +4,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -103,29 +98,6 @@ internal fun HomeScaffold(
                 content()
             }
             overlay()
-        }
-    }
-}
-
-/** 自绘内容的页面骨架：页面自己滚动时使用，只提供返回按钮与标题。 */
-@Composable
-internal fun ScreenScaffold(
-    title: String,
-    onBack: () -> Unit,
-    content: @Composable (PaddingValues) -> Unit,
-) {
-    Scaffold(
-        topBar = {
-            SmallTopAppBar(
-                title = title,
-                navigationIcon = { BackButton(onBack) },
-            )
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()),
-        ) {
-            content(padding)
         }
     }
 }
@@ -342,19 +314,4 @@ internal fun <T> ListChoicePreference(
         cancelButtonText = stringResource(R.string.cancel),
         enabled = enabled,
     )
-}
-
-/** 行内小标题的通用间距，供自绘页面沿用同一套垂直节奏。 */
-internal val SettingsRowSpacing = 8.dp
-
-/** 供自绘页面使用的空占位（保持与列表页一致的底部留白）。 */
-@Composable
-internal fun BottomSpacer() {
-    Spacer(Modifier.width(0.dp))
-}
-
-/** 自绘页面里的一行文字标题，跟随 COUI 的正文样式。 */
-@Composable
-internal fun BodyText(text: String, color: androidx.compose.ui.graphics.Color = COUITheme.colorScheme.labelPrimary) {
-    Text(text = text, style = COUITheme.textStyles.bodyM, color = color)
 }

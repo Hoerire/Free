@@ -1,7 +1,6 @@
 package io.github.hoerire.free.hook
 
 import android.os.Bundle
-import android.util.Log
 import io.github.hoerire.free.log.ModuleLog
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
@@ -25,7 +24,6 @@ internal class SettingsHookInstaller(
 ) {
     private val dumped = ConcurrentHashMap.newKeySet<String>()
     private val emitted = AtomicInteger(0)
-    private val injector = SettingsEntryInjector()
 
     fun install(classLoader: ClassLoader) {
         // 首页（设置应用）用 Compat 版基类；自由浮窗设置（com.oplus.pscanvas）用
@@ -218,15 +216,6 @@ internal class SettingsHookInstaller(
         }
     }
 
-    /**
-     * 自由浮窗设置页的注入挂点：PreferenceGroup.addPreference。
-     *
-     * 该页的树由 App 代码逐条 addPreference 拼装（pscanvas 打包的 androidx preference
-     * 是精简版，没有 setPreferenceScreen 一类装填 API，生命周期点上树始终为空）。
-     * 在这里既能看到每个条目的归属分组，也是唯一可靠的注入时机：
-     * 「浮窗模式」分组实例在它第一条子项进来时记下，组内「操作教程」落座后
-     * 把模块入口追加到组尾（排在官方两项之后）。
-     */
     /**
      * 「操作教程」入口改道：该条目点击后进入 OperationActivity（自由浮窗的操作引导页），
      * hook 它的 onCreate，改道启动 Free 模块，原引导页不再显示。

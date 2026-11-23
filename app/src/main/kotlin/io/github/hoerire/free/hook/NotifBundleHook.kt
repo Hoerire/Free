@@ -3,9 +3,9 @@ package io.github.hoerire.free.hook
 import android.app.KeyguardManager
 import android.content.Context
 import android.os.Bundle
-import android.util.Log
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
+import io.github.hoerire.free.config.CallNotificationGuard
 import io.github.hoerire.free.log.ModuleLog
 import io.github.hoerire.free.hook.OemReflection
 
@@ -72,6 +72,11 @@ internal class NotifBundleHook(
         }
         val bundle = args.getOrNull(0) as? Bundle ?: return
         val entry = args.getOrNull(1)
+        // 通话通知保持系统默认启动：不写小窗参数，点开就是全屏通话界面。
+        if (CallNotificationGuard.isCallNotification(notificationOf(entry))) {
+            ModuleLog.info("NOTIF_BUNDLE_SKIP_CALL")
+            return
+        }
         val pkg = packageOf(entry)
         if (pkg != null && pkg in SKIP_PACKAGES) return
         // 黑名单（暂停增强）与排除列表（禁用浮窗）都保持系统原有启动方式。
@@ -251,6 +256,12 @@ internal class NotifBundleHook(
         }
         return if (removed.isEmpty()) "-" else removed.toString()
     }
+
+    private fun notificationOf(entry: Any?): android.app.Notification? =
+        runCatching {
+            val sbn = entry?.javaClass?.getMethod("getSbn")?.invoke(entry)
+            sbn?.javaClass?.getMethod("getNotification")?.invoke(sbn) as? android.app.Notification
+        }.getOrNull()
 
     private fun packageOf(entry: Any?): String? {
         if (entry == null) return null

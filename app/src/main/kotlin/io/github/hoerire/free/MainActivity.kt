@@ -47,7 +47,6 @@ class MainActivity : ComponentActivity() {
             val apps = appRepository.apps.collectAsState().value
             val appsLoading = appRepository.loading.collectAsState().value
             val update = updateChecker.state.collectAsState().value
-            androidx.compose.runtime.LaunchedEffect(Unit) { repository.retryIfNeeded() }
             // 应用列表固定包含全部已安装应用（含没有桌面图标的组件），不再按开关筛选。
             androidx.compose.runtime.LaunchedEffect(Unit) {
                 appRepository.refresh()
@@ -75,6 +74,8 @@ class MainActivity : ComponentActivity() {
                     onOutsideTapCloseModeChange = repository::setOutsideTapCloseMode,
                     onHandleSwipeUpToMiniEnabledChange =
                         repository::setHandleSwipeUpToMiniEnabled,
+                    onExternalHandleEnabledChange =
+                        repository::setExternalHandleEnabled,
                     onPauseInLandscapeChange = repository::setPauseInLandscape,
                     onPauseInGameModeChange = repository::setPauseInGameMode,
                     onPauseInKeyboardChange = repository::setPauseInKeyboard,

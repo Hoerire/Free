@@ -7,7 +7,6 @@ import io.github.hoerire.free.log.ModuleLog
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Field
-import java.lang.reflect.Method
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**

@@ -9,6 +9,7 @@ import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.SwipeUp
+import androidx.compose.material.icons.rounded.UnfoldMore
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -33,6 +34,7 @@ import io.github.hoerire.free.ui.component.PreferenceIcon
  * - 其余窗口行为项各自独立，互不依赖；
  * - 「手势与关闭」独立成组。
  */
+
 /** 已开启的启动场景数量，用于二级入口的 summary。 */
 private fun enabledSceneCount(state: FrameworkConnectionState): Int {
     val settings = state.settings
@@ -53,6 +55,7 @@ internal fun ZoomOptionsScreen(
     onZoomAllowAnyAppChange: (Boolean) -> Unit,
     onHideZoomInRecentsChange: (Boolean) -> Unit,
     onAutoCloseWindowChange: (Boolean) -> Unit,
+    onExternalHandleEnabledChange: (Boolean) -> Unit,
     onNavigateToZoomExcluded: () -> Unit,
     onNavigateToZoomLaunchScenes: () -> Unit,
     onNavigateToGesture: () -> Unit,
@@ -114,6 +117,14 @@ internal fun ZoomOptionsScreen(
                     summary = stringResource(R.string.auto_close_window_summary),
                     enabled = sub,
                     startAction = { PreferenceIcon(Icons.Rounded.DeleteSweep, sub) },
+                )
+                SwitchPreference(
+                    checked = state.settings.externalHandleEnabled,
+                    onCheckedChange = onExternalHandleEnabledChange,
+                    title = stringResource(R.string.external_handle_title),
+                    summary = stringResource(R.string.external_handle_summary),
+                    enabled = sub,
+                    startAction = { PreferenceIcon(Icons.Rounded.UnfoldMore, sub) },
                 )
                 RemoteDpSliderPreference(
                     icon = Icons.Rounded.Layers,

@@ -10,7 +10,6 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.text.TextUtils
-import android.util.Log
 import io.github.hoerire.free.log.ModuleLog
 import android.util.TypedValue
 import android.view.Gravity
@@ -34,13 +33,10 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
     private var host: ViewGroup? = null
     private var overlayAttached = false
     private var clockView: TextView? = null
-    private var clockOriginalVisibility = -1
-    private var clockSuppressed = false
     private var pendingText: String? = null
     private var hasPending = false
     private val hiddenPeers = ArrayList<View>()
     private val hiddenPeerVisibility = ArrayList<Int>()
-    private var notificationIconsContainer: ViewGroup? = null
     private val removeAction = Runnable { removeImmediately() }
     private val pageAdvanceAction = Runnable { advancePage() }
     private val overlayKeepAliveAction = Runnable { keepOverlayAlive() }
@@ -218,13 +214,6 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         }
     }
 
-    private fun chooseClockAnchor(root: ViewGroup, clock: View): ViewGroup {
-        // 保留 BubbleNotificationHook 选定的宿主：把它提升到更宽的时钟祖先上，
-        // 会改变 ViewOverlay 的坐标系，
-        // 让滚动条在状态栏第一次重新布局后跳位。
-        return root
-    }
-
     /** 查找状态栏时钟，并让本组件实时跟随其着色变化。 */
     private fun attachClockStyle(root: ViewGroup) {
         val found = findClockView(root)
@@ -235,42 +224,6 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
             if (hasText) copyClockStyle()
             true
         }
-    }
-
-    private fun placeAtClockPosition(parent: ViewGroup) {
-        var index = parent.childCount
-        val clock = clockView
-        if (clock != null && clock.parent === parent) {
-            index = parent.indexOfChild(clock)
-        }
-        val lp = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.MATCH_PARENT,
-        )
-
-        val clockLp = clock?.layoutParams
-        if (clockLp != null) {
-            val maxWidth = parent.measuredWidth
-            ticker.maxWidth = if (maxWidth > 0) (maxWidth * 0.45f).toInt() else dp(160f)
-        }
-        parent.addView(this, index, lp)
-        suppressClock()
-        ModuleLog.debug("BubbleNotify") {
-            "滚动浮层已挂上：parent=" + parent.javaClass.simpleName +
-                " idx=" + index + " clockFound=" + (clockView != null) +
-                " clockSuppressed=" + clockSuppressed
-        }
-    }
-
-    private fun suppressClock() {
-        val clock = clockView ?: return
-        // 时钟的显隐由 hideStatusBarPeers() 负责：退场动画开始后，
-        // 不要再覆盖它记录的原始可见性。
-        if (hiddenPeers.contains(clock)) return
-        if (clockSuppressed) return
-        clockOriginalVisibility = clock.visibility
-        clock.visibility = View.GONE
-        clockSuppressed = true
     }
 
     private fun hideStatusBarPeers(parent: ViewGroup) {
@@ -284,7 +237,6 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         if (icons != null && icons !== this && icons !== clockView &&
             icons.visibility != View.GONE
         ) {
-            notificationIconsContainer = icons as? ViewGroup
             hiddenPeers.add(icons)
             hiddenPeerVisibility.add(icons.visibility)
             animatePeerOut(icons)
@@ -297,46 +249,6 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         view.translationY = -distance
         view.animate().alpha(0f).setDuration(150L)
             .withEndAction { view.visibility = View.GONE }.start()
-    }
-
-    private fun hidePeersRecursive(view: View) {
-        if (view === this) return
-        // 宿主自己也可能叫 status_bar_start_side / statusIcons：
-        // 必须保持可见，因为滚动条画在该宿主的叠加层里。
-        if (view === host) {
-            if (view is ViewGroup) {
-                for (i in 0 until view.childCount) {
-                    hidePeersRecursive(view.getChildAt(i))
-                }
-            }
-            return
-        }
-        val name = view.javaClass.name
-        var idName = ""
-        try {
-            if (view.id != View.NO_ID) idName = view.resources.getResourceEntryName(view.id)
-        } catch (ignored: Throwable) {
-        }
-        // 尾侧的容器承载信号、Wi-Fi、蓝牙与电量，
-        // 永远不要递归进去、也不要隐藏这块区域。
-        val rightSystemArea = idName.contains("end_side") ||
-            idName.contains("system_icon_area") ||
-            idName.contains("status_bar_end")
-        if (rightSystemArea) return
-        // 只隐藏单个通知图标视图，不要隐藏 statusIcons / start_side 这类
-        // 大容器：ColorOS 可能把信号、电量或滚动条宿主
-        // 放在这些容器里面。
-        val notificationPeer = name.contains("StatusBarIconView") ||
-            name.contains("NotificationIcon")
-        if (notificationPeer && view.visibility != View.GONE) {
-            hiddenPeers.add(view)
-            hiddenPeerVisibility.add(view.visibility)
-            view.visibility = View.GONE
-            return
-        }
-        if (view is ViewGroup) {
-            for (i in 0 until view.childCount) hidePeersRecursive(view.getChildAt(i))
-        }
     }
 
     private fun restorePeers() {
@@ -355,7 +267,6 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         }
         hiddenPeers.clear()
         hiddenPeerVisibility.clear()
-        notificationIconsContainer = null
     }
 
     private fun findNotificationIcons(view: View?): View? {
@@ -398,20 +309,6 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
             )
         } catch (ignored: Throwable) {
             return if (vertical) clock.top else clock.left
-        }
-    }
-
-    private fun clockCenterOffsetInHost(): Int {
-        val clock = clockView ?: return statusBarHeight() / 2
-        val currentHost = host ?: return statusBarHeight() / 2
-        try {
-            val clockLocation = IntArray(2)
-            val parentLocation = IntArray(2)
-            clock.getLocationInWindow(clockLocation)
-            currentHost.getLocationInWindow(parentLocation)
-            return Math.max(0, clockLocation[1] - parentLocation[1] + clock.height / 2)
-        } catch (ignored: Throwable) {
-            return clock.top + clock.height / 2
         }
     }
 
@@ -633,18 +530,6 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         return null
     }
 
-    private fun restoreClock() {
-        if (!clockSuppressed) return
-        val clock = clockView ?: return
-        val restored = when (clockOriginalVisibility) {
-            View.INVISIBLE -> View.INVISIBLE
-            View.GONE -> View.GONE
-            else -> View.VISIBLE
-        }
-        clock.visibility = restored
-        clockSuppressed = false
-    }
-
     /** 从状态栏时钟复制字体与颜色；找不到时钟时退回到状态栏前景色。 */
     private fun copyClockStyle() {
         var color = statusForeground()
@@ -749,7 +634,6 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         hasText = false
         completedRounds = 0
         restorePeers()
-        restoreClock()
         ticker.animate().cancel()
         animate().cancel()
         alpha = 0f
@@ -833,7 +717,6 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
     private fun detachOverlay() {
         handler.removeCallbacks(overlayKeepAliveAction)
         restorePeers()
-        restoreClock()
         val currentHost = host
         if (currentHost != null && overlayAttached) {
             try {

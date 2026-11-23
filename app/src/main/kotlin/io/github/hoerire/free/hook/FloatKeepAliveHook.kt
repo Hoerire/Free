@@ -6,12 +6,10 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
-import android.util.Log
 import io.github.hoerire.free.log.ModuleLog
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.ref.WeakReference
-import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.util.concurrent.ConcurrentHashMap
 
@@ -55,8 +53,8 @@ internal class FloatKeepAliveHook(
      * 最近「用户点开浮标」的任务号 → 时刻。
      *
      * 展开浮标时系统会请求可见性，而这条请求和「浮标里的应用自己起新页面」走的是同一个
-     * setVisibleRequested(true)。以前一律按「非游戏拒绝抬可见」处理，结果展开的那一下被拒，
-     * 窗口停在 always_hidden + 浮标坐标上：屏幕上只剩任务快照（透明、比例不对）。
+     * setVisibleRequested(true)。不能一律按「非游戏拒绝抬可见」处理：那样展开的那一下会被拒，
+     * 窗口停在 always_hidden + 浮标坐标上，屏幕上只剩任务快照（透明、比例不对）。
      * 用户点开浮标的短时间内放行一次。
      */
     private val unfloatAt = ConcurrentHashMap<Int, Long>()
@@ -630,7 +628,6 @@ internal class FloatKeepAliveHook(
         }
     }
 
-    /** 比较两份 Configuration 的窗口旋转值（windowConfiguration 是隐藏 API，走反射）。 */
     /**
      * 浮标被摘掉时记一行：息屏期间如果原厂把浮标收掉，这里能直接看到任务号与原因码。
      */
@@ -1790,17 +1787,6 @@ internal class FloatKeepAliveHook(
         // 窗口由系统压在锁屏之下，用户看不到，不会把浮标画到锁屏上。
         shouldKeep(record) && !rotationGuard.get() && !unlockGuard.get()
 
-    private fun isDisplayLockedOrOff(record: Any?): Boolean {
-        val display = OemReflection.callNoArg(record, "getDisplayContent") ?: return false
-        val policy = OemReflection.callNoArg(display, "getDisplayPolicy")
-        if (policy != null) {
-            if (OemReflection.callNoArg(policy, "isKeyguardShowing") == true) return true
-            if (OemReflection.readField(policy, "mAwake") == false) return true
-        }
-        val state = OemReflection.readField(OemReflection.readField(display, "mDisplayInfo"), "state") as? Int
-        return state == DISPLAY_STATE_OFF
-    }
-
 
     private fun logRelease(record: Any?, reason: String) {
         val target = record ?: return
@@ -1880,7 +1866,6 @@ internal class FloatKeepAliveHook(
         val UNLOCK_CHECK_DELAYS_MS = longArrayOf(800L, 1600L, 2600L)
 
         /** 熄屏状态：Display.STATE_OFF */
-        const val DISPLAY_STATE_OFF = 1
 
         /** 复查白名单豁免的时间间隔（毫秒）。 */
         const val EXEMPT_SWEEP_MS = 60_000L

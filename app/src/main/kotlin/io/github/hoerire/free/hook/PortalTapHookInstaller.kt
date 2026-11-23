@@ -77,22 +77,20 @@ internal class PortalTapHookInstaller(
                 object : android.content.BroadcastReceiver() {
                     override fun onReceive(receiverContext: android.content.Context?, intent: android.content.Intent?) {
                         when (intent?.action) {
-                            ModulePreferences.ACTION_SETTINGS_PUSHED -> {
-                                if (sentFromUid != moduleUid) return
-                                val map = SettingsBridge.readMap(intent.extras) ?: return
-                                val next = runCatching { SettingsBridge.decode(map) }.getOrNull() ?: return
-                                configuration.override(next)
-                            }
-                            ModulePreferences.ACTION_SETTINGS_SNAPSHOT -> {
-                                val map = SettingsBridge.readMap(intent.extras) ?: return
-                                val next = runCatching { SettingsBridge.decode(map) }.getOrNull() ?: return
-                                configuration.override(next)
-                            }
-                            // 2.2 的单一路径：App 每次改设置都发这个广播。传送门进程晚于
-                            // 设置变更启动时，只靠 SETTINGS_PUSHED/SNAPSHOT 会永远停在旧快照，
-                            // 表现为「自由传送」打开后长按仍只有系统原版面板。
+                            // App 每次改设置都发这个广播；载荷里带整份快照，
+                            // 直接覆盖内存快照即可，不必再去 reload 远程偏好。
                             ModulePreferences.ACTION_PINNED_TARGETS_CHANGED -> {
                                 if (sentFromUid != moduleUid) return
+                                val pushed =
+                                    SettingsBridge.readMap(intent.extras)
+                                        ?.let { map ->
+                                            runCatching { SettingsBridge.decode(map) }.getOrNull()
+                                        }
+                                if (pushed != null) {
+                                    configuration.override(pushed)
+                                    return
+                                }
+                                // 旧格式兜底：载荷里没有整份快照时，重读远程偏好再叠上本次推送的固定项。
                                 val encoded =
                                     intent.getStringExtra(ModulePreferences.EXTRA_PINNED_TARGETS)
                                         ?: return
@@ -118,19 +116,9 @@ internal class PortalTapHookInstaller(
                 receiver,
                 android.content.IntentFilter().apply {
                     addAction(ModulePreferences.ACTION_PINNED_TARGETS_CHANGED)
-                    addAction(ModulePreferences.ACTION_SETTINGS_PUSHED)
-                    addAction(ModulePreferences.ACTION_SETTINGS_SNAPSHOT)
                 },
                 android.content.Context.RECEIVER_EXPORTED,
             )
-            // 进程晚于设置变更启动时，主动要一份当前快照。
-            runCatching {
-                context.sendBroadcast(
-                    android.content.Intent(ModulePreferences.ACTION_SETTINGS_REQUEST)
-                        .setPackage("android")
-                        .putExtra(ModulePreferences.EXTRA_REQUESTER_PACKAGE, PACKAGE_NAME),
-                )
-            }
             ModuleLog.install("PORTAL_SETTINGS_RECEIVER_INSTALLED")
         }.onFailure {
             settingsReceiverInstalled.set(false)

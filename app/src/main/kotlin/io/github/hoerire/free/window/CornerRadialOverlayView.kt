@@ -38,8 +38,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -194,7 +194,7 @@ internal class CornerRadialOverlayView(
     /** 扇形半径百分比：左右两侧共用，随每次呼出由设置注入。 */
     private var radialRadiusPercent = ModulePreferences.DEFAULT_RADIAL_RADIUS_PERCENT
 
-    /** 展开/收回时长（毫秒）：用户在设置里调，默认值等于原先写死的数。 */
+    /** 展开/收回时长（毫秒）：用户在设置里调，见 `ModulePreferences.DEFAULT_RADIAL_*_DURATION_MS`。 */
     private var expandDurationMs = ModulePreferences.DEFAULT_RADIAL_EXPAND_DURATION_MS
     private var retractDurationMs = ModulePreferences.DEFAULT_RADIAL_RETRACT_DURATION_MS
 
@@ -361,6 +361,9 @@ internal class CornerRadialOverlayView(
 
     /** 入场动画是否已经播完；没播完就抬手说明是误触，不该启动应用。 */
     fun isSettled(): Boolean = entrySettled
+
+    /** 「保持挂起」：菜单停在屏幕上、等用户点选，而不是随抬手收起。 */
+    fun isKeepOpen(): Boolean = keepOpen && !panelModeState.value && !dismissing
 
     fun finishGesture() {
         val selection = selectedIndex
@@ -1420,6 +1423,20 @@ internal class CornerRadialOverlayView(
         if (!panelModeState.value && !dismissing) updateGestureFromLatestPoint()
     }
 
+    /**
+     * 当前可用于命中判定的展开进度（0..1）。
+     *
+     * 与绘制共用 [RadialEntryMotion.sample] 的半径曲线：绘制画到哪儿，命中就判到哪儿。
+     * 关闭动画期间直接返回 0，避免"正在消失的图标还能点"。
+     */
+    private fun currentRadialProgress(): Float {
+        // 系统关掉了动画：图标直接落在终态，命中也是满半径。
+        if (!exitAnimationsEnabled) return 1f
+        // 收回/关闭途中不再接受新的命中：图标正在往回缩，点中只会点到一个正在消失的格子。
+        if (retracting.value || dismissing) return 0f
+        return RadialEntryMotion.sample(entryProgress.value).radialProgress.coerceIn(0f, 1f)
+    }
+
     private fun updateGestureFromLatestPoint() {
         val metrics = metricsState.value ?: return
         val layout = layoutState.value
@@ -1432,6 +1449,9 @@ internal class CornerRadialOverlayView(
                 previous = selectedIndex,
                 enterRadius = metrics.radial.selectionEnterRadius,
                 keepRadius = metrics.radial.selectionKeepRadius,
+                // 命中圈跟着图标的实际位置走：展开途中图标还挤在底角，
+                // 若按满半径判命中，快速轻扫会在"一坨"上直接选中一格。
+                progress = currentRadialProgress(),
             )
         val inwardDistance = kotlin.math.hypot(latestX - layout.origin.x, latestY - layout.origin.y)
         val inwardLimit = layout.radius * CANCEL_INWARD_RATIO
@@ -1725,7 +1745,6 @@ internal class CornerRadialOverlayView(
         const val STRETCH_MAX_DP = 6f
 
 
-        /** 背景遮罩不透明度（窗口不使用 FLAG_DIM_BEHIND，由绘制层提供）。 */
         /**
          * 遮罩浓度：只留极淡一层。
          *

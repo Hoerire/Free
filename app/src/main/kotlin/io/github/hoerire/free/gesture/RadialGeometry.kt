@@ -53,6 +53,13 @@ internal object RadialGeometry {
         return RadialLayout(side, origin, radius, centers)
     }
 
+    /**
+     * 命中判定。
+     *
+     * [progress] 是展开进度（0..1）：图标按它从角落铺开，命中圈必须跟着同比例缩，
+     * 否则展开途中图标还挤在底角、命中圈却已经是满半径，快速轻扫会在"一坨"上误选。
+     * 传 1 表示已经展开完毕（保持挂起后的点选就走这条）。
+     */
     fun selection(
         layout: RadialLayout,
         x: Float,
@@ -60,24 +67,43 @@ internal object RadialGeometry {
         previous: Int?,
         enterRadius: Float,
         keepRadius: Float,
+        progress: Float = 1f,
     ): Int? {
         if (layout.radius <= 0f) return null
+        // 整条几何（半径、进入半径、保持半径）按同一比例缩放：手指相对圆心的位置不变，
+        // 命中圈始终贴在画出来的图标上。
+        val scale = progress.coerceIn(0f, 1f)
+        if (scale <= 0f) return null
+        val radius = layout.radius * scale
+        val enter = enterRadius * scale
+        val keep = if (keepRadius > 0f) keepRadius * scale else 0f
+        val centers =
+            if (scale >= 1f) {
+                layout.itemCenters
+            } else {
+                layout.itemCenters.map {
+                    GesturePoint(
+                        x = layout.origin.x + (it.x - layout.origin.x) * scale,
+                        y = layout.origin.y + (it.y - layout.origin.y) * scale,
+                    )
+                }
+            }
         // 不再做弧线收边：只按「离哪个图标最近」判定，手指偏离弧线也能接着选。
-        // keepRadius <= 0 表示没有保持圈：换格只看谁更近（两格中线处切换），不做迟滞。
-        if (previous != null && keepRadius > 0f && previous in layout.itemCenters.indices) {
-            val center = layout.itemCenters[previous]
-            if (hypot(x - center.x, y - center.y) <= keepRadius) return previous
+        // keep <= 0 表示没有保持圈：换格只看谁更近（两格中线处切换），不做迟滞。
+        if (previous != null && keep > 0f && previous in centers.indices) {
+            val center = centers[previous]
+            if (hypot(x - center.x, y - center.y) <= keep) return previous
         }
         // 命中范围以「屏幕直角（扇形原点）」为基准：离原点的距离落在圆弧半径
-        // ±enterRadius 的环带内就算命中，再按角度取最近的那一格。
+        // ±enter 的环带内就算命中，再按角度取最近的那一格。
         // 不能按「图标圆心」判距离：那样手指必须先精确滑到某个图标附近才响应，
         // 圈看起来很大、实际却要越过圈才选中。
         val fromOrigin = hypot(x - layout.origin.x, y - layout.origin.y)
-        if (kotlin.math.abs(fromOrigin - layout.radius) > enterRadius) return null
-        return layout.itemCenters
+        if (kotlin.math.abs(fromOrigin - radius) > enter) return null
+        return centers
             .indices
             .minByOrNull { index ->
-                val center = layout.itemCenters[index]
+                val center = centers[index]
                 hypot(x - center.x, y - center.y)
             }
     }

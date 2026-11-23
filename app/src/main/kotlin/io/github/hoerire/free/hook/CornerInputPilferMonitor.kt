@@ -4,7 +4,6 @@ import android.content.Context
 import android.hardware.display.DisplayManager
 import android.os.HandlerThread
 import android.util.DisplayMetrics
-import android.util.Log
 import io.github.hoerire.free.log.ModuleLog
 import android.view.Display
 import android.view.InputChannel

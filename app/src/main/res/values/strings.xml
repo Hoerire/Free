@@ -28,7 +28,6 @@
     <string name="module_enabled_summary_waiting">连接框架后可更改</string>
     <string name="module_enabled_summary_scope">补全所需作用域后可更改</string>
     <string name="corner_trigger_side_title">触发位置</string>
-    <string name="corner_trigger_side_summary">从屏幕底角斜向内上滑呼出扇形菜单</string>
     <string name="corner_trigger_side_both">左右下角</string>
     <string name="corner_trigger_side_left">仅左下角</string>
     <string name="corner_trigger_side_right">仅右下角</string>
@@ -90,7 +89,6 @@
     <string name="radial_backdrop_title">背景遮罩</string>
     <string name="radial_backdrop_summary">向左压暗，向右系统模糊，0 为不处理</string>
     <string name="outside_tap_close_title">关闭小窗</string>
-    <string name="outside_tap_close_summary">关闭自由浮窗的触发方式</string>
     <string name="outside_tap_mode_disabled">不执行</string>
     <string name="outside_tap_mode_single">轻击窗外</string>
     <string name="outside_tap_mode_double">双击窗外</string>
@@ -99,15 +97,15 @@
     <string name="radial_interaction_summary">关闭后底角手势全部停用</string>
     <string name="radial_keep_open_title">保持挂起</string>
     <string name="radial_keep_open_summary">松手保持扇形菜单，可以继续滑动点选应用</string>
-  <string name="radial_breathing_title">呼吸特效</string>
-  <string name="radial_breathing_summary">图标两秒一口气地起伏，逐格错峰；关闭后完全静止</string>
-  <string name="radial_effect_group_title">选中特效</string>
-  <string name="radial_effect_entry_summary">流光特效 · 选中放大 · 选中外顶</string>
-  <string name="radial_size_page_title">外观细节</string>
-  <string name="radial_size_entry_summary">图标大小 · 扇形大小 · 背景遮罩 · 时长 · 呼吸 · 选中特效</string>
-  <string name="radial_size_preview_hint">拖动滑杆时，这张示意图会跟着变</string>
-  <string name="radial_shimmer_enabled_title">流光特效</string>
-  <string name="radial_shimmer_enabled_summary">选中项外沿的常亮光圈、星头与运动轨迹</string>
+    <string name="radial_breathing_title">呼吸特效</string>
+    <string name="radial_breathing_summary">图标两秒一口气地起伏，逐格错峰；关闭后完全静止</string>
+    <string name="radial_effect_group_title">选中特效</string>
+    <string name="radial_effect_entry_summary">流光特效 · 选中放大 · 选中外顶</string>
+    <string name="radial_size_page_title">外观细节</string>
+    <string name="radial_size_entry_summary">图标大小 · 扇形大小 · 背景遮罩 · 时长 · 呼吸 · 选中特效</string>
+    <string name="radial_size_preview_hint">拖动滑杆时，这张示意图会跟着变</string>
+    <string name="radial_shimmer_enabled_title">流光特效</string>
+    <string name="radial_shimmer_enabled_summary">选中项外沿的常亮光圈、星头与运动轨迹</string>
     <string name="radial_shimmer_title">流光参数</string>
     <string name="radial_shimmer_summary">扫速 · 宽度 · 亮度 · 间隙 · 发光范围</string>
     <string name="radial_shimmer_speed_title">扫掠速度</string>
@@ -122,10 +120,10 @@
     <string name="radial_shimmer_glow_alpha_summary">图标四周柔光的峰值不透明度（百分比）</string>
     <string name="radial_shimmer_glow_radius_title">外发光半径</string>
     <string name="radial_shimmer_glow_radius_summary">柔光的扩散范围，按图标直径的百分比</string>
-  <string name="radial_shimmer_scale_title">选中放大</string>
-  <string name="radial_shimmer_scale_summary">选中时图标放大的比例（百分比），默认 0 不放大</string>
-  <string name="radial_selected_push_title">选中外顶</string>
-  <string name="radial_selected_push_summary">选中格沿半径向外顶出的比例（图标直径的百分比），0 为不顶</string>
+    <string name="radial_shimmer_scale_title">选中放大</string>
+    <string name="radial_shimmer_scale_summary">选中时图标放大的比例（百分比），默认 0 不放大</string>
+    <string name="radial_selected_push_title">选中外顶</string>
+    <string name="radial_selected_push_summary">选中格沿半径向外顶出的比例（图标直径的百分比），0 为不顶</string>
     <string name="zoom_limit_removed_title">小窗交互</string>
     <string name="zoom_interaction_title">轻量打开</string>
     <string name="zoom_launch_scenes_hint">在以下场景使用自由浮窗打开</string>
@@ -133,7 +131,7 @@
     <string name="zoom_launch_entry_off">已关闭</string>
     <string name="zoom_group_window_title">窗口行为</string>
     <string name="zoom_group_gesture_title">手势交互</string>
-  <string name="zoom_gesture_entry_summary">快速上滑 · 长按静音 · 关闭方式</string>
+    <string name="zoom_gesture_entry_summary">快速上滑 · 长按静音 · 关闭方式</string>
     <string name="zoom_options_summary">自由浮窗数量、启动场景与窗口操作</string>
     <string name="zoom_max_windows_title">小窗数量</string>
     <string name="zoom_max_windows_summary">同时存在的自由浮窗个数</string>
@@ -160,14 +158,13 @@
     <string name="float_keep_alive_title">贴边挂机</string>
     <string name="float_keep_alive_summary">收成贴边浮标后保持应用继续运行</string>
     <string name="zoom_group_edge_title">贴边浮标</string>
-  <string name="zoom_edge_entry_summary">贴边挂机 · 浮标数量</string>
-    <string name="float_handle_switch_title">贴边互切</string>
-    <string name="float_handle_switch_summary">点开另一个浮标时，前一个继续收成浮标</string>
+    <string name="zoom_edge_entry_summary">贴边挂机 · 浮标数量</string>
     <string name="float_handle_max_title">贴边数量</string>
     <string name="float_handle_max_summary">同时保留的浮标个数，最多 10 个</string>
-    <string name="zoom_max_windows_blocked_summary">已由「贴边互切」接管，开启期间固定为 1</string>
     <string name="handle_swipe_up_to_mini_title">快速上滑</string>
     <string name="handle_swipe_up_to_mini_summary">底部横条上滑，切为迷你浮窗</string>
+    <string name="external_handle_title">沉浸式隐藏指示条</string>
+    <string name="external_handle_summary">全面屏手势与小窗的指示条平时隐藏，触摸后重新显示；不占位、不改变布局</string>
 
     <string name="radial_apps_screen_title">扇形应用</string>
     <string name="radial_apps_screen_subtitle">最多添加七项，长按拖动调整顺序；第二组可在上方切换后单独配置</string>
@@ -179,7 +176,6 @@
     <string name="added_apps_empty_summary">添加应用、快捷入口或工具后，按此顺序显示在扇形中</string>
     <string name="pinned_app_missing">条目已移除或当前不可用</string>
     <string name="select_apps_action">添加应用</string>
-    <string name="add_named_app_action">添加 %1$s</string>
     <string name="remove_named_app_action">移除 %1$s</string>
     <string name="available_apps_loading">正在读取应用</string>
     <string name="available_apps_loading_summary">应用列表将在后台准备完成后显示</string>
@@ -203,7 +199,6 @@
     <string name="update_dismiss_action">暂不更新</string>
     <string name="update_dismiss_summary">该版本不再提示，直到出现更高版本</string>
     <string name="about_app_title">关于应用</string>
-    <string name="about_version_label">版本号</string>
     <string name="about_version_format">%1$s</string>
     <string name="about_feedback_title">交流反馈</string>
     <string name="about_feedback_summary">点击加入 QQ 群</string>
@@ -225,7 +220,6 @@
     <string name="sidebar_catalog_loading_summary">读取当前可用的工具、快捷入口和分身应用</string>
     <string name="sidebar_catalog_unavailable">侧边栏目录暂不可用</string>
     <string name="sidebar_catalog_retry_summary">请确认智能侧边栏已开启且模块作用域生效，点此重试</string>
-    <string name="retry_action">重试</string>
 
     <string name="bubble_feature_title">气泡通知</string>
     <string name="bubble_feature_summary">白名单应用的通知收成可拖动气泡</string>
@@ -239,16 +233,11 @@
     <string name="bubble_apps_empty">还没有添加应用</string>
     <string name="bubble_apps_empty_summary">点下面的「添加应用」选择</string>
     <string name="bubble_add_app">添加应用</string>
-    <string name="bubble_clones_title">分身应用 · %1$d</string>
-    <string name="bubble_clones_empty">还没有添加分身</string>
-    <string name="bubble_clones_empty_summary">分身是独立的 Android 用户；在主应用勾选不影响分身</string>
-    <string name="bubble_add_clone">添加分身应用</string>
     <string name="bubble_clones_available">已检测到 %1$d 个分身应用</string>
     <string name="bubble_clones_none_detected">未检测到分身应用</string>
     <string name="bubble_clones_none_detected_summary">点一下重新扫描；需要先创建应用分身并打开过一次</string>
     <string name="bubble_clone_label">%1$s · 分身 %2$d</string>
     <string name="bubble_remove_named">移除 %1$s</string>
-    <string name="bubble_appearance_title">外观</string>
     <string name="bubble_size_title">气泡大小</string>
     <string name="bubble_size_summary">100 为原始 92dp 尺寸（60–140）</string>
     <string name="bubble_icon_title">通知图标大小</string>
@@ -257,14 +246,12 @@
     <string name="bubble_badge_summary">100 为原始 16dp（50–180）</string>
     <string name="bubble_motion_title">循环播放动效</string>
     <string name="bubble_motion_summary">持续的气泡装饰；关闭后只保留 180ms 淡入</string>
-    <string name="bubble_timing_title">停留与收起</string>
     <string name="bubble_auto_dismiss_title">到点自动收起</string>
     <string name="bubble_auto_dismiss_summary">关闭后气泡一直停留；开启后到点按「到点变暗留置」处理</string>
     <string name="bubble_timeout_title">停留时长</string>
     <string name="bubble_timeout_summary">3–60 秒；贴边气泡不计时</string>
     <string name="bubble_dim_title">到点变暗留置</string>
     <string name="bubble_dim_summary">开启：到点只变暗、留在原位；关闭：到点贴边收起（半隐藏）</string>
-    <string name="bubble_preview_title">内容浮层</string>
     <string name="bubble_preview_enabled_title">自动展开内容卡</string>
     <string name="bubble_preview_enabled_summary">气泡出现时展开内容卡，停留几秒后自动收回</string>
     <string name="bubble_suppress_banner_title">接管通知横幅</string>
@@ -294,7 +281,6 @@
     <string name="bubble_timing_summary_seconds">%1$d 秒 · %2$s</string>
     <string name="bubble_timing_summary_off">一直停留（不自动收起）</string>
     <string name="bubble_timeout_dim_kept">变暗留置</string>
-    <string name="bubble_timeout_collapse">到点收起</string>
     <string name="bubble_timeout_dock">贴边收起</string>
     <string name="bubble_preview_summary_on">开 · %1$s · %2$s</string>
     <string name="bubble_preview_summary_off">关（不展开内容卡）</string>

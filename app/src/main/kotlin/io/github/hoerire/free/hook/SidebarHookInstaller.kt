@@ -200,9 +200,8 @@ internal class SidebarHookInstaller(private val module: XposedModule, private va
             runCatching { installScreenIdentifyRedirect(loader) }
                 .onFailure { log(Log.WARN, "SCREEN_IDENTIFY_REDIRECT_FAILED", it) }
             // 「更多」面板里的工具（付款码、扫一扫这类）保持系统行为：原样交给系统 uid 代发，
-            // 不由模块改成小窗。这里曾经挂过 `AppPlatformUtils.n(Intent, Bundle, UserHandle)`
-            // 去并小窗参数，但登记入口（PanelToolLaunchBridge.arm）早已移除，hook 永远匹配不上，
-            // 只剩「目标方法不存在」的报错；连同死代码一起删掉。
+            // 不由模块改成小窗。不要在这里挂 `AppPlatformUtils.n(Intent, Bundle, UserHandle)`
+            // 去并小窗参数：登记入口（PanelToolLaunchBridge.arm）已不在，hook 永远匹配不上。
             resolveVisualTarget(loader, applicationInfo)
         } catch (exception: ReflectiveOperationException) {
             handles.forEach { it.unhook() }
@@ -217,31 +216,27 @@ internal class SidebarHookInstaller(private val module: XposedModule, private va
     }
 
     /**
-     * 侧边栏进程自己的设置通道。
+     * 接收模块应用的设置变更广播。
      *
-     * 本进程的设置同样来自 LSPosed 远程偏好；模块重装后那份存储会变空，于是本进程一直停在
-     * 「总开关关闭」的旧快照上。SystemUI 早就用「注册接收器 + 向 system_server 索取一次
-     * 权威快照」解决同一个问题（见 SystemUiHookInstaller.installSettingsObserver），
-     * 侧边栏这边一直没有，只能等模块应用推送——而那个接收器挂在目录 endpoint 上，
-     * endpoint 又要先被绑定才会创建，形成闭环。这里按 SystemUI 的做法补齐：
-     * `com.coloros.smartsidebar` 本来就在 SystemServerSettingsBridge 的白名单里。
+     * 侧边栏进程的设置来自 LSPosed 远程偏好，模块重装后那份存储会变空、进程会一直停在
+     * 「总开关关闭」的旧快照上。这里收模块应用每次改设置都发的广播，载荷带整份快照，
+     * 直接覆盖内存快照即可。
      */
     private fun installSettingsSync(context: android.content.Context) {
         val receiver =
             object : android.content.BroadcastReceiver() {
                 override fun onReceive(receiverContext: android.content.Context?, intent: android.content.Intent?) {
-                    when (intent?.action) {
-                        io.github.hoerire.free.config.ModulePreferences.ACTION_PINNED_TARGETS_CHANGED ->
-                            configuration.forceReload()
-                        io.github.hoerire.free.config.ModulePreferences.ACTION_SETTINGS_PUSHED,
-                        io.github.hoerire.free.config.ModulePreferences.ACTION_SETTINGS_SNAPSHOT -> {
-                            val map = io.github.hoerire.free.config.SettingsBridge.readMap(intent.extras)
-                                ?: return
-                            runCatching { io.github.hoerire.free.config.SettingsBridge.decode(map) }
-                                .onSuccess { configuration.override(it) }
-                                .onFailure { log(Log.WARN, "SIDEBAR_SETTINGS_DECODE_FAILED", it) }
-                        }
+                    if (intent?.action !=
+                        io.github.hoerire.free.config.ModulePreferences.ACTION_PINNED_TARGETS_CHANGED
+                    ) return
+                    val map = io.github.hoerire.free.config.SettingsBridge.readMap(intent.extras)
+                    if (map == null) {
+                        configuration.forceReload()
+                        return
                     }
+                    runCatching { io.github.hoerire.free.config.SettingsBridge.decode(map) }
+                        .onSuccess { configuration.override(it) }
+                        .onFailure { log(Log.WARN, "SIDEBAR_SETTINGS_DECODE_FAILED", it) }
                 }
             }
         runCatching {
@@ -249,22 +244,10 @@ internal class SidebarHookInstaller(private val module: XposedModule, private va
                 receiver,
                 android.content.IntentFilter().apply {
                     addAction(io.github.hoerire.free.config.ModulePreferences.ACTION_PINNED_TARGETS_CHANGED)
-                    addAction(io.github.hoerire.free.config.ModulePreferences.ACTION_SETTINGS_PUSHED)
-                    addAction(io.github.hoerire.free.config.ModulePreferences.ACTION_SETTINGS_SNAPSHOT)
                 },
                 android.content.Context.RECEIVER_EXPORTED,
             )
-            // 主动索取一次：system_server 已经落盘并持有权威快照，本进程内存里可能还是空的。
-            context.sendBroadcast(
-                Intent(io.github.hoerire.free.config.ModulePreferences.ACTION_SETTINGS_REQUEST).apply {
-                    setPackage("android")
-                    putExtra(
-                        io.github.hoerire.free.config.ModulePreferences.EXTRA_REQUESTER_PACKAGE,
-                        ColorOsSidebarTarget.PACKAGE_NAME,
-                    )
-                },
-            )
-            log(Log.INFO, "SIDEBAR_SETTINGS_SYNC_REQUESTED", null)
+            log(Log.INFO, "SIDEBAR_SETTINGS_SYNC_REGISTERED", null)
         }.onFailure { log(Log.WARN, "SIDEBAR_SETTINGS_SYNC_FAILED", it) }
     }
 

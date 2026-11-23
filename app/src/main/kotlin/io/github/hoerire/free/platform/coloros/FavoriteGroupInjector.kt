@@ -8,7 +8,7 @@ import io.github.hoerire.free.config.ModulePreferences
 import java.io.File
 
 /**
- * 「更多」面板的收藏分组。
+ * 「更多」面板的收藏分组：把系统「全部应用」面板的列表改成「收藏 + 最近」两组。
  *
  * 面板数据来自系统侧边栏，条目本身都在 adapter 的 mData 里（[Title, 工具…, Title, 应用…]）。
  * 这里按系统侧边栏的用户设置（coloros_ep_entry_user.xml）的顺序重排成收藏段；
@@ -17,16 +17,11 @@ import java.io.File
  * 收藏之后接一段「最近打开的应用」，数据直接取系统 UserPanelView.getRecentData()，
  * 不再自己统计点击记录。
  *
- * 优先走 [transform]（hook getMData，数据首次读取即为最终顺序，面板不会闪）；
- * [apply] 只作为兜底。
- */
-/**
- * 把系统「全部应用」面板的列表改成「收藏 + 最近」两组。
- *
  * 工作方式：
  * 1. [prepareAsync] 在后台线程构造行数据（读侧边栏顺序 XML + UsageStats 最近记录），结果缓存在 [prepared]；
  * 2. [apply] 在主线程把结果**原地**写进 adapter 的 mData（不换对象、默认不 notify），避免重建与掉帧；
- * 3. adapter 的数据观察者会在系统重灌原厂数据时再次调用 [apply] 覆盖回来。
+ * 3. adapter 的数据观察者会在系统重灌原厂数据时再次调用 [apply] 覆盖回来；
+ * 4. 优先走 [transform]（hook getMData，数据首次读取即为最终顺序，面板不会闪），[apply] 只作为兜底。
  *
  * 数据契约：行元素是从侧边栏 dex 反射构造的原生 bean，顺序即最终展示顺序；
  * mData 必须是可变 List，否则退化为 field 赋值 + notifyDataSetChanged。
@@ -55,12 +50,6 @@ internal object FavoriteGroupInjector {
     /** 每个 adapter 第一次注入前的原始列表；后续注入都以它为基准。 */
     private val originals = java.util.WeakHashMap<Any, List<*>>()
 
-
-
-    /**
-     * hook 到 SearchHelper.getCurrentDataList()：面板拿到的第一份数据就是最终顺序，
-     * 不改字段、不调 notifyDataSetChanged，所以不会有「先渲染再重排」的闪烁。
-     */
     /** 最近一次成功重排的结果：重排失败时沿用该结果，不回退为系统原始列表。 */
     @Volatile
     private var lastGood: List<Any?>? = null
@@ -160,7 +149,6 @@ internal object FavoriteGroupInjector {
         }
     }
 
-    /** 兜底：直接改写 adapter 的 mData 并通知刷新（会有一次重建）。 */
     /** 最近一次注入过的 adapter，用于“算完就地回写”。 */
     private var appliedAdapter: java.lang.ref.WeakReference<Any>? = null
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -233,10 +221,6 @@ internal object FavoriteGroupInjector {
         }
     }
 
-    /**
-     * 纯数据构造：只看用户设置 XML + 最近使用，不依赖当前列表内容。
-     * 在后台线程调用，主线程只负责把结果原地写进 adapter 的列表。
-     */
     /** 侧边栏进程拿不到 getRecentTasks，由 system_server 推送补上。 */
     private fun ensureRecentsReceiver(context: Context?) {
         if (recentsReceiverRegistered) return
@@ -258,6 +242,10 @@ internal object FavoriteGroupInjector {
         }
     }
 
+    /**
+     * 纯数据构造：只看用户设置 XML + 最近使用，不依赖当前列表内容。
+     * 在后台线程调用，主线程只负责把结果原地写进 adapter 的列表。
+     */
     private fun buildRows(loader: ClassLoader, context: android.content.Context?): List<Any?>? {
         val order = readOrder() ?: return null
         val picked = order.mapNotNull { buildAliasItem(loader, context, it) }.distinctBy { aliasOf(it) }
@@ -391,7 +379,7 @@ internal object FavoriteGroupInjector {
             val second = groupTitles.getOrNull(1)
             // 最近打开：直接采用侧边栏基于使用情况访问权限统计出的名单。
             val pickedAliases = picked.mapNotNull { aliasOf(it) }.toHashSet()
-            // 这条兜底路径原先连「收藏」都没排除，现在与 buildRows 用同一套排除集。
+            // 兜底路径与 buildRows 用同一套排除集，否则「收藏」项会重复出现在最近列表里。
             val recentItems = recentItems(loader, context, pickedAliases + pinnedAliases())
             d { "picked=" + picked.size + " recent=" + recentItems.size +
                 " second=" + (second != null) }

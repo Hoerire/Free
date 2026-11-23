@@ -9,7 +9,6 @@ import android.view.ViewGroup
 import android.widget.TextView
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
-import java.lang.reflect.Method
 
 /**
  * 状态栏滚动：把最新通知的「应用·标题 正文」塞进状态栏时钟的位置滚动一遍。

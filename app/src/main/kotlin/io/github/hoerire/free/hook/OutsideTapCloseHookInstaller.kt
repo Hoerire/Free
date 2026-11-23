@@ -421,7 +421,6 @@ internal class OutsideTapCloseHookInstaller(
         return runCatching { field.getInt(task) }.getOrDefault(-1)
     }
 
-    /** 刚由 addFlexibleTask 建出来的窗口，用于把它挡在驱逐排序的最前面。 */
     /** 浮动任务所属包名；取不到时为 null（回收侧按包名可选匹配）。 */
     private fun packageOfTask(task: Any): String? =
         runCatching {
@@ -909,14 +908,6 @@ internal class OutsideTapCloseHookInstaller(
             synchronized(engines) { engines.values.forEach(OutsideTapGestureEngine::interrupt) }
         }
 
-        /**
-         * 关闭兜底。
-         *
-         * 触摸区扩大之后，系统自身会处理「点窗外关闭」；若同时立即调用
-         * `exitFlexibleTask`，等于同一个窗口被退出两次，表现为关闭瞬间画面闪很多下
-         * （从浮标恢复的小窗尤其明显）。现在改为：先让系统关，延迟一小段再检查，
-         * 只有窗口仍然存在时才补一次关闭。
-         */
         /**
          * 「底部关闭」：处理 FlexibleCaptionView 的触摸分发。
          *

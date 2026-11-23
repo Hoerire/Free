@@ -4,13 +4,13 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import android.view.View
+import io.github.hoerire.free.config.CallNotificationGuard
 import io.github.hoerire.free.config.ModulePreferences
 import io.github.hoerire.free.config.ModuleSettingsSnapshot
 import io.github.hoerire.free.hook.ProcessConfiguration
@@ -527,9 +527,6 @@ internal class BubbleCoordinator(
         val bubble = windows.bubble ?: return
         val items = queue.snapshot()
         bubble.setStackCount(if (items.size > 1) items.size else 0)
-        bubble.setChildIcons(
-            items.drop(1).take(MAX_CHILD_ICONS).mapNotNull { payloads.clone(it.payload.icon) },
-        )
     }
 
     // ---- 内容卡 ---------------------------------------------------------------
@@ -1007,6 +1004,8 @@ internal class BubbleCoordinator(
     }
 
     private fun isBubbleEligible(notification: android.app.Notification): Boolean {
+        // 通话通知保持系统默认外观（系统自己的接听界面），不生成气泡、也不参与状态栏滚动。
+        if (CallNotificationGuard.isCallNotification(notification)) return false
         if ((notification.flags and android.app.Notification.FLAG_GROUP_SUMMARY) != 0) return false
         if ((notification.flags and android.app.Notification.FLAG_ONGOING_EVENT) != 0) return false
         return true
@@ -1066,7 +1065,6 @@ internal class BubbleCoordinator(
 
     private companion object {
         const val MAX_STACK_ITEMS = 6
-        const val MAX_CHILD_ICONS = 3
         const val DUPLICATE_WINDOW_MS = 1_200L
         /** 前台轮询间隔：只在有气泡通知时运行。 */
         const val FOREGROUND_POLL_MS = 700L

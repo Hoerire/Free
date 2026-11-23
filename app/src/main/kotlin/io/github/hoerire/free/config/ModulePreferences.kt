@@ -14,23 +14,6 @@ internal object ModulePreferences {
      */
     const val EXTRA_SKIP_ZOOM = "io.github.hoerire.free.extra.SKIP_ZOOM"
 
-    /** 模块应用 → system_server：推送整份设置快照（附带回执请求）。 */
-    const val ACTION_SETTINGS_PUSHED = "io.github.hoerire.free.action.SETTINGS_PUSHED"
-
-    /** 模块应用 → system_server：只要当前快照，用于应用启动时对齐界面。 */
-    const val ACTION_SETTINGS_REQUEST = "io.github.hoerire.free.action.SETTINGS_REQUEST"
-
-    /**
-     * 查询方可显式声明回执地址。
-     *
-     * SystemUI 与侧边栏不在模块应用的包下，靠广播身份取发起方需要额外开共享身份；
-     * 直接写明包名更稳，接收方按白名单校验后照此回执。
-     */
-    const val EXTRA_REQUESTER_PACKAGE = "requester_package"
-
-    /** system_server → 模块应用：权威快照（推送的回执与查询的答复共用）。 */
-    const val ACTION_SETTINGS_SNAPSHOT = "io.github.hoerire.free.action.SETTINGS_SNAPSHOT"
-
     /**
      * system_server → 侧边栏进程：最近任务包名（新的在前）。
      *
@@ -55,7 +38,7 @@ internal object ModulePreferences {
     /**
      * 扇形展开 / 收回的动画时长（毫秒），由用户自己调。
      *
-     * 默认值就是原先写死的那两个数（展开 380、收回 500）。上限 1000 是「再长就等得难受」
+     * 默认值展开 380、收回 500。上限 1000 是「再长就等得难受」
      * 的经验值；下限 100 保证动画仍然可读——再短等于没有动画。
      *
      * 这两个时长同时驱动入场/退场的图标动画与背景效果（压暗的淡入淡出、模糊的渐变量）。
@@ -85,6 +68,14 @@ internal object ModulePreferences {
     const val KEY_CORNER_PINS = "corner_pins_v1"
     const val KEY_OUTSIDE_TAP_CLOSE_MODE = "outside_tap_close_mode_v1"
     const val KEY_HANDLE_SWIPE_UP_TO_MINI_ENABLED = "handle_swipe_up_to_mini_enabled"
+
+    /**
+     * 沉浸式隐藏指示条：小窗的底部横条与顶部三点、以及全面屏手势指示条，
+     * 平时隐藏、触摸后重新显示（不占位、应用不下沉）。
+     *
+     * 与其他手势项一致，只受模块总开关约束。默认关闭：关掉后系统显隐完全按原厂处理。
+     */
+    const val KEY_EXTERNAL_HANDLE_ENABLED = "external_handle_enabled_v1"
     const val KEY_PAUSE_IN_LANDSCAPE = "pause_in_landscape"
     const val KEY_PAUSE_IN_GAME_MODE = "pause_in_game_mode"
 
@@ -124,17 +115,13 @@ internal object ModulePreferences {
     /** 复制链接：复制链接弹窗与系统分发服务代发的 VIEW 启动。 */
     const val KEY_ZOOM_LAUNCH_CLIPBOARD = "zoom_launch_clipboard_v1"
 
-    /** 窗口超过数量限制时，自动关闭旧窗口而不是收成贴边浮标。 */
     /** 侧边栏进程就绪：由模块在侧边栏进程内发出，system_server 收到后才去读目录。 */
     const val ACTION_SIDEBAR_READY = "io.github.hoerire.free.action.SIDEBAR_READY"
 
-    /** 侧边栏真正被系统拉起（面板进入 SHOWING）：目录只认这个事件。 */
-    const val ACTION_SIDEBAR_SHOWN = "io.github.hoerire.free.action.SIDEBAR_SHOWN"
-
+    /** 窗口超过数量限制时，自动关闭旧窗口而不是收成贴边浮标。 */
     const val KEY_AUTO_CLOSE_WINDOW = "auto_close_window_v1"
     const val DEFAULT_AUTO_CLOSE_WINDOW = false
 
-    /** 最近任务：把当前处于小窗状态的任务从最近任务卡片里隐藏。 */
     /**
      * 气泡点开小窗的时刻（Settings.Global 毫秒时间戳）。
      *
@@ -142,6 +129,8 @@ internal object ModulePreferences {
      * system_server「这次启动是气泡来的」。
      */
     const val KEY_BUBBLE_OPEN_AT = "free_bubble_open_at"
+
+    /** 最近任务：把当前处于小窗状态的任务从最近任务卡片里隐藏。 */
     const val KEY_HIDE_ZOOM_IN_RECENTS = "hide_zoom_in_recents_v1"
     const val DEFAULT_HIDE_ZOOM_IN_RECENTS = false
 
@@ -288,7 +277,7 @@ internal object ModulePreferences {
     const val KEY_BUBBLE_PREVIEW_DYNAMIC_TIMEOUT = "bubble_preview_dynamic_timeout_v1"
     const val KEY_BUBBLE_AUTO_DISMISS = "bubble_auto_dismiss_v1"
     const val KEY_BUBBLE_MOTION_CONTINUOUS = "bubble_motion_continuous_v1"
-    /** 状态栏滚动：最新通知在状态栏时钟位置滚动显示。 */
+
     /** 状态栏滚动开关：气泡总闸之下的子开关，可以只滚不出气泡。 */
     const val KEY_STATUS_SCROLL_ENABLED = "status_scroll_enabled_v1"
     const val KEY_STATUS_SCROLL_ROUNDS = "status_scroll_rounds_v1"
@@ -333,9 +322,6 @@ internal object ModulePreferences {
     const val KEY_CLONE_DEEP_LINK = "free_bubble_clone_deep_link"
 
     /** system_server → SystemUI：剪贴板分类结果（即时建议）。 */
-    /** 前台应用变化：system_server 通知 SystemUI 收掉该应用已弹出的气泡。 */
-    const val ACTION_APP_FOREGROUND = "io.github.hoerire.free.action.APP_FOREGROUND"
-    const val EXTRA_APP_FOREGROUND_PACKAGE = "package"
     const val ACTION_CLIPBOARD_SUGGESTION =
         "io.github.hoerire.free.action.CLIPBOARD_SUGGESTION"
     const val EXTRA_CLIP_KINDS = "clip_kinds"
@@ -450,6 +436,7 @@ internal object ModulePreferences {
 
     val DEFAULT_OUTSIDE_TAP_CLOSE_MODE = OutsideTapCloseMode.Disabled
     const val DEFAULT_HANDLE_SWIPE_UP_TO_MINI_ENABLED = false
+    const val DEFAULT_EXTERNAL_HANDLE_ENABLED = false
     const val DEFAULT_PAUSE_IN_LANDSCAPE = true
     const val DEFAULT_PAUSE_IN_GAME_MODE = true
     const val DEFAULT_PAUSE_IN_KEYBOARD = false

@@ -7,6 +7,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.service.notification.StatusBarNotification
 import io.github.hoerire.free.bubble.CloneDeepLinkStore
+import io.github.hoerire.free.config.CallNotificationGuard
 import io.github.hoerire.free.config.ModulePreferences
 import io.github.hoerire.free.log.ModuleLog
 import io.github.libxposed.api.XposedInterface
@@ -71,6 +72,8 @@ internal class NotificationCloneCaptureHook(
     private fun capture(args: List<Any?>?) {
         val sbn = args?.firstOrNull { it is StatusBarNotification } as? StatusBarNotification
             ?: return
+        // 通话通知不参与深链捕获：通话页的启动走系统自己的接听链路。
+        if (CallNotificationGuard.isCallNotification(sbn.notification)) return
         // 主用户的通知不需要这条通道：直接发送 contentIntent 本来就在正确的用户里。
         val userId = sbn.userId
         if (userId <= 0) return

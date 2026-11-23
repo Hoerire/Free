@@ -43,12 +43,9 @@ internal class BubbleSurfaceView(
     private val params: WindowManager.LayoutParams
     private val mainHandler = Handler(Looper.getMainLooper())
     private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val childShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val corePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val highlightPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val childCorePaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val childRingPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val burstPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val refractionPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     // 静态色散描边用来近似玻璃色散：既不采样浮层背后的画面，
@@ -62,15 +59,11 @@ internal class BubbleSurfaceView(
     private val appBadgePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val appBadgeRingPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val iconBounds = Rect()
-    private val iconClipBounds = RectF()
     private val highlightArc = RectF()
     private val iconClip = Path()
     private val coreClip = Path()
-    private val childClip = Path()
-    private val badgeClip = Path()
     private val mainAnimationContinuous: Boolean
     private val darkMode: Boolean
-    private val childIconDrawables = ArrayList<Drawable>()
 
     private var notificationIcon: Drawable? = null
 
@@ -93,7 +86,6 @@ internal class BubbleSurfaceView(
     private var swipeListener: SwipeListener? = null
     private var landingAnimator: ValueAnimator? = null
     private var breathingAnimator: ValueAnimator? = null
-    private var orbitAnimator: ValueAnimator? = null
     private var burstAnimator: ValueAnimator? = null
     private var dockAnimator: ValueAnimator? = null
     private var dockBreathAnimator: ValueAnimator? = null
@@ -139,7 +131,6 @@ internal class BubbleSurfaceView(
     private var dragStartedAt = 0L
     private var downRawX = 0f
     private var downRawY = 0f
-    private var orbitPhase = 0f
     private var burstProgress = 0f
     private var landingFrameProgress = -1f
     private var badgeScale = 1f
@@ -205,23 +196,6 @@ internal class BubbleSurfaceView(
         highlightPaint.style = Paint.Style.STROKE
         highlightPaint.strokeWidth = dp(1.2f).toFloat()
         highlightPaint.strokeCap = Paint.Cap.ROUND
-        childCorePaint.color = if (darkMode) {
-            Color.argb(215, 68, 88, 103)
-        } else {
-            Color.argb(205, 245, 250, 255)
-        }
-        childShadowPaint.color = if (darkMode) {
-            Color.argb(75, 0, 0, 0)
-        } else {
-            Color.argb(44, 0, 0, 0)
-        }
-        childRingPaint.style = Paint.Style.STROKE
-        childRingPaint.strokeWidth = dp(1f).toFloat()
-        childRingPaint.color = if (darkMode) {
-            Color.argb(200, 184, 213, 229)
-        } else {
-            Color.argb(190, 255, 255, 255)
-        }
         badgeRingPaint.style = Paint.Style.STROKE
         badgeRingPaint.strokeWidth = dp(1f).toFloat()
         badgeRingPaint.color = Color.argb(215, 255, 255, 255)
@@ -405,12 +379,6 @@ internal class BubbleSurfaceView(
         }
     }
 
-    fun setChildIcons(icons: List<Drawable>?) {
-        childIconDrawables.clear()
-        if (icons != null) childIconDrawables.addAll(icons)
-        invalidate()
-    }
-
     fun setStackCount(count: Int) {
         stackedCount = Math.max(0, count)
         invalidate()
@@ -443,7 +411,6 @@ internal class BubbleSurfaceView(
         // 不做环绕装饰，也不自动收起。
         if (expanded) {
             stopLandingAnimation()
-            stopOrbitAnimation()
             mainHandler.removeCallbacks(timeoutAction)
             return
         }
@@ -578,8 +545,6 @@ internal class BubbleSurfaceView(
             floatingY = y
         }
     }
-
-    fun getChildIcons(): List<Drawable> = ArrayList(childIconDrawables)
 
     /** 在浮层挂出之前应用已保存的落点。 */
     fun applyPersistedPosition(xPercent: Int, yPercent: Int, edge: Int) {
@@ -731,7 +696,6 @@ internal class BubbleSurfaceView(
         mainHandler.removeCallbacks(imeAvoidanceAction)
         stopBreathingAnimation()
         stopLandingAnimation()
-        stopOrbitAnimation()
         burstAnimator?.cancel()
         burstAnimator = null
         animate().cancel()
@@ -757,7 +721,6 @@ internal class BubbleSurfaceView(
         pointerDown = false
         stopBreathingAnimation()
         stopLandingAnimation()
-        stopOrbitAnimation()
         burstAnimator?.cancel()
         burstAnimator = null
         animate().cancel()
@@ -1040,27 +1003,6 @@ internal class BubbleSurfaceView(
         canvas.restoreToCount(save)
     }
 
-    private fun drawChildBubbles(canvas: Canvas, cx: Float, cy: Float) {
-        val count = childIconDrawables.size
-        if (count == 0 || landingFrameProgress < 0f) return
-        // 静止时只有一颗干净的气泡；落地过程中，
-        // 被大部分遮住的错落边缘会短暂露出「后面还有排队的通知」。
-        for (index in (Math.min(count, 3) - 1) downTo 0) {
-            val phase = landingFrameProgress * Math.PI.toFloat() * 4f - index * 0.52f
-            val pulse = Math.max(0f, Math.sin(phase.toDouble()).toFloat())
-            val childRadius = dp(25f - index * 0.8f).toFloat()
-            val side = if (index % 2 == 0) -1f else 1f
-            val childX = cx + side * dp(3.2f + index * 1.1f) * pulse
-            val childY = cy + dp(2.5f + index) - dp(2.4f + index) * pulse
-            val alpha = Math.round((58f + 50f * pulse) * (1f - index * 0.13f))
-            childCorePaint.shader = null
-            childCorePaint.color = Color.argb(alpha, 236, 246, 252)
-            childRingPaint.color = Color.argb(Math.min(180, alpha + 48), 255, 255, 255)
-            canvas.drawCircle(childX, childY, childRadius, childCorePaint)
-            canvas.drawCircle(childX, childY, childRadius - dp(1f), childRingPaint)
-        }
-    }
-
     private fun drawBurstFragments(canvas: Canvas, cx: Float, cy: Float) {
         val fragmentProgress = clamp((burstProgress - 0.12f) / 0.88f, 0f, 1f)
         val alpha = Math.round(210f * (1f - fragmentProgress))
@@ -1072,25 +1014,6 @@ internal class BubbleSurfaceView(
             burstPaint.color = Color.argb(alpha, 236, 248, 255)
             canvas.drawCircle(x, y, dp(1.8f + index % 3).toFloat(), burstPaint)
         }
-    }
-
-    private fun startOrbitAnimation() {
-        if (orbitAnimator != null || !attached) return
-        val animator = ValueAnimator.ofFloat(orbitPhase, orbitPhase + 360f)
-        animator.duration = 7200L
-        animator.repeatCount = ValueAnimator.INFINITE
-        animator.interpolator = LinearInterpolator()
-        animator.addUpdateListener { a ->
-            orbitPhase = (a.animatedValue as Float) % 360f
-            invalidate()
-        }
-        orbitAnimator = animator
-        animator.start()
-    }
-
-    private fun stopOrbitAnimation() {
-        orbitAnimator?.cancel()
-        orbitAnimator = null
     }
 
     override fun onSizeChanged(width: Int, height: Int, oldWidth: Int, oldHeight: Int) {

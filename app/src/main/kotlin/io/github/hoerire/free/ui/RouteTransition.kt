@@ -29,9 +29,6 @@ internal object PageTransitionSpec {
     const val PARALLAX_RATIO = 1f / 3f
 }
 
-/** 滑动转场时长；保留旧名字给现有调用点。 */
-internal const val ROUTE_SLIDE_MS = PageTransitionSpec.SLIDE_MS
-
 /**
  * 页面转场状态：当前页 + 正在退场的上一页 + 方向。
  *

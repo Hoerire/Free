@@ -321,14 +321,6 @@ internal class ColorOsAllAppsContent(loader: ClassLoader, target: ColorOsSidebar
         false
     }
 
-    /** 工具依赖的包：优先 getValidPkg，其次 getPkgs 首项；取不到时不登记。 */
-    private fun toolTargetPackage(tool: Any): String? {
-        val valid = runCatching { tool.javaClass.getMethod("getValidPkg").invoke(tool) as? String }.getOrNull()
-        if (!valid.isNullOrEmpty()) return valid
-        val packages = runCatching { tool.javaClass.getMethod("getPkgs").invoke(tool) as? Array<*> }.getOrNull()
-        return packages?.firstOrNull() as? String
-    }
-
     /** 取 adapter 第 [index] 个条目本身。 */
     private fun itemAt(adapter: Any, index: Int): Any? = try {
         (adapter.javaClass.getMethod("getMData").invoke(adapter) as? List<*>)?.getOrNull(index)
@@ -401,9 +393,6 @@ internal class ColorOsAllAppsContent(loader: ClassLoader, target: ColorOsSidebar
         false
     }
 
-    /**
-     * 收藏段：面板数据异步加载，尽量在展开动画期间就完成重排，减少可见闪烁。
-     */
     /** 系统重灌数据时恢复模块顺序：原地改列表，不触发重建。 */
     private fun attachDataObserver(adapter: Any) {
         runCatching {

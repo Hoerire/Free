@@ -32,6 +32,9 @@ internal data class ModuleSettingsSnapshot(
         ModulePreferences.DEFAULT_OUTSIDE_TAP_CLOSE_MODE,
     val handleSwipeUpToMiniEnabled: Boolean =
         ModulePreferences.DEFAULT_HANDLE_SWIPE_UP_TO_MINI_ENABLED,
+    /** 沉浸式隐藏指示条：小窗横条与三点、全面屏手势指示条平时隐藏，触摸后重新显示。 */
+    val externalHandleEnabled: Boolean =
+        ModulePreferences.DEFAULT_EXTERNAL_HANDLE_ENABLED,
     val pauseInLandscape: Boolean = ModulePreferences.DEFAULT_PAUSE_IN_LANDSCAPE,
     val pauseInGameMode: Boolean = ModulePreferences.DEFAULT_PAUSE_IN_GAME_MODE,
     /** 屏蔽键盘：输入法弹出时暂停扇形手势（默认关闭）。 */
@@ -189,6 +192,9 @@ internal data class ModuleSettingsSnapshot(
     /** 快速上滑转迷你独立于启动场景开关，只跟模块总开关走。 */
     val handleSwipeUpToMiniEffective: Boolean get() = enabled && handleSwipeUpToMiniEnabled
 
+    /** 该项只跟模块总开关走：关掉时小窗横条与手势指示条都立即恢复系统默认显隐。 */
+    val externalHandleEffective: Boolean get() = enabled && externalHandleEnabled
+
     /** 解除限制是否生效：模块总开关 ×「解除限制」。 */
     val freeDragActive: Boolean get() = enabled && freeDragEnabled
 
@@ -217,7 +223,7 @@ internal data class ModuleSettingsSnapshot(
             bubbleWhitelist.any { it == key }
         }
     }
-    /** 贴边互切打开时，小窗数量交还默认值（1）。 */
+    /** 模块总开关关闭时，小窗数量与浮标数量都交还各自的默认值。 */
     val zoomMaxWindowCountEffective: Int
         get() = if (zoomInteractionActive) zoomMaxWindowCount else ModulePreferences.DEFAULT_ZOOM_MAX_WINDOW_COUNT
 
@@ -419,6 +425,10 @@ internal data class ModuleSettingsSnapshot(
                 ModulePreferences.KEY_HANDLE_SWIPE_UP_TO_MINI_ENABLED,
                 handleSwipeUpToMiniEnabled,
             )
+            .putBoolean(
+                ModulePreferences.KEY_EXTERNAL_HANDLE_ENABLED,
+                externalHandleEnabled,
+            )
         if (pinsSaved) {
             editor.putString(
                 ModulePreferences.KEY_PINNED_TARGETS,
@@ -494,6 +504,11 @@ internal data class ModuleSettingsSnapshot(
                 preferences.getBoolean(
                     ModulePreferences.KEY_HANDLE_SWIPE_UP_TO_MINI_ENABLED,
                     ModulePreferences.DEFAULT_HANDLE_SWIPE_UP_TO_MINI_ENABLED,
+                )
+            val externalHandleEnabled =
+                preferences.getBoolean(
+                    ModulePreferences.KEY_EXTERNAL_HANDLE_ENABLED,
+                    ModulePreferences.DEFAULT_EXTERNAL_HANDLE_ENABLED,
                 )
             val hasTargets = preferences.contains(ModulePreferences.KEY_PINNED_TARGETS)
             val pinsSaved = hasTargets || preferences.contains(ModulePreferences.KEY_CORNER_PINS)
@@ -580,6 +595,7 @@ internal data class ModuleSettingsSnapshot(
                 secondaryGroupSide = secondaryGroupSide,
                 outsideTapCloseMode = outsideTapCloseMode,
                 handleSwipeUpToMiniEnabled = handleSwipeUpToMiniEnabled,
+                externalHandleEnabled = externalHandleEnabled,
                 pauseInLandscape = preferences.getBoolean(
                     ModulePreferences.KEY_PAUSE_IN_LANDSCAPE,
                     ModulePreferences.DEFAULT_PAUSE_IN_LANDSCAPE,

@@ -47,6 +47,37 @@ class RadialGeometryTest {
     }
 
     @Test
+    fun collapsedProgressSelectsNothingEvenFarFromOrigin() {
+        val layout = RadialGeometry.layout(CornerSide.Left, 1000f, 2000f, 400f, 7)
+        // 目标格的最终位置：展开进度为 0 时图标还在原点，这个位置不该命中任何一格。
+        val far = layout.itemCenters[3]
+        assertNull(RadialGeometry.selection(layout, far.x, far.y, null, 120f, 0f, progress = 0f))
+        // 低进度下命中圈缩在原点附近，同样不认这个远处的位置。
+        assertNull(RadialGeometry.selection(layout, far.x, far.y, null, 120f, 0f, progress = 0.35f))
+    }
+
+    @Test
+    fun hitRingFollowsDrawnProgress() {
+        val layout = RadialGeometry.layout(CornerSide.Left, 1000f, 2000f, 400f, 7)
+        val index = 3
+        val finalCenter = layout.itemCenters[index]
+        // 展开到 50%：命中的应该是"画到一半"的那一格，而不是最终位置。
+        val midCenter =
+            GesturePoint(
+                x = layout.origin.x + (finalCenter.x - layout.origin.x) * 0.5f,
+                y = layout.origin.y + (finalCenter.y - layout.origin.y) * 0.5f,
+            )
+        assertEquals(
+            index,
+            RadialGeometry.selection(layout, midCenter.x, midCenter.y, null, 120f, 0f, progress = 0.5f),
+        )
+        // 反之，展开途中把手指放到最终位置（半径已满处）不该命中。
+        assertNull(RadialGeometry.selection(layout, finalCenter.x, finalCenter.y, null, 120f, 0f, progress = 0.5f))
+        // 完全展开后最终位置当然命中同一格。
+        assertEquals(index, RadialGeometry.selection(layout, finalCenter.x, finalCenter.y, null, 120f, 0f))
+    }
+
+    @Test
     fun appCentersStayInsideScreenAndMoreRemainsClosestToCorner() {
         val width = 1000f
         val height = 2000f

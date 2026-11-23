@@ -2,7 +2,6 @@ package io.github.hoerire.free.apps
 
 import android.os.Bundle
 import android.os.Parcel
-import io.github.hoerire.free.config.PinnedTarget
 import io.github.hoerire.free.config.PinnedTargetCodec
 import java.io.File
 
