@@ -156,6 +156,10 @@ internal class FrameworkConnectionRepository(private val context: Context) {
     fun setQuickShareEnabled(enabled: Boolean) =
         updateSettings { it.copy(quickShareEnabled = enabled) }
 
+    /** 是否允许调整触发延迟：关闭时系统长按阈值保持原厂 400ms。 */
+    fun setDragLongPressEnabled(enabled: Boolean) =
+        updateSettings { it.copy(dragLongPressEnabled = enabled) }
+
     /** 拖拽触发延迟（毫秒）：写回配置，由 system_server 应用到系统长按阈值。 */
     fun setDragLongPressMs(ms: Int) =
         updateSettings { it.copy(dragLongPressMs = ModulePreferences.coerceDragLongPressMs(ms)) }

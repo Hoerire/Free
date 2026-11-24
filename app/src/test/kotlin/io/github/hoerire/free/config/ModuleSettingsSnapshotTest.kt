@@ -117,6 +117,32 @@ class ModuleSettingsSnapshotTest {
     }
 
     @Test
+    fun dragLongPressDelayRequiresItsOwnSwitch() {
+        val off = ModuleSettingsSnapshot(enabled = true, dragLongPressMs = 120)
+        // 开关默认关闭：滑条记下的值不写进系统，实际阈值仍是官方 400ms。
+        assertFalse(off.dragLongPressActive)
+        assertEquals(ModulePreferences.DEFAULT_DRAG_LONG_PRESS_MS, off.dragLongPressMsEffective)
+
+        val on = off.copy(dragLongPressEnabled = true)
+        assertTrue(on.dragLongPressActive)
+        assertEquals(120, on.dragLongPressMsEffective)
+
+        // 模块总开关关掉时即使子开关开着也不接管。
+        assertFalse(on.copy(enabled = false).dragLongPressActive)
+        assertEquals(
+            ModulePreferences.DEFAULT_DRAG_LONG_PRESS_MS,
+            on.copy(enabled = false).dragLongPressMsEffective,
+        )
+
+        // 往返：开关与数值各存各的，互不覆盖。
+        val preferences = InMemoryPreferences()
+        on.writeTo(preferences.edit()).commit()
+        val restored = ModuleSettingsSnapshot.readFrom(preferences)
+        assertTrue(restored.dragLongPressEnabled)
+        assertEquals(120, restored.dragLongPressMs)
+    }
+
+    @Test
     fun pauseSwitchesRoundTripIndependently() {
         for (landscape in listOf(false, true)) {
             for (game in listOf(false, true)) {

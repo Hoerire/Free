@@ -60,9 +60,12 @@
     <string name="blacklist_title">排除列表</string>
     <string name="blacklist_summary">排除列表内的应用在前台时停用模块全部功能，离开后自动恢复</string>
     <string name="free_drag_title">自由传送</string>
+    <string name="drag_long_press_toggle_title">自定义触发延迟</string>
+    <string name="drag_long_press_toggle_on">已接管系统长按阈值，下面的滑条可调；会影响所有长按操作</string>
+    <string name="drag_long_press_toggle_off">关闭时保持系统默认 400 毫秒，不接管长按阈值</string>
     <string name="drag_long_press_title">触发延迟</string>
     <string name="drag_long_press_summary">长按多久触发拖拽，400 毫秒为官方行为，越小越灵敏</string>
-    <string name="free_drag_summary">长按拖起内容的两项增强</string>
+    <string name="free_drag_summary">长按拖起内容的两项增强，可另调触发延迟</string>
     <string name="free_drag_unlock_title">解除限制</string>
     <string name="free_drag_unlock_summary">解除官方传送门白名单限制</string>
     <string name="quick_share_title">快速分享</string>

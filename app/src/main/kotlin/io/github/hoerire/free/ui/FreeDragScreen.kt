@@ -17,14 +17,18 @@ import io.github.hoerire.free.ui.component.SettingsGroup
 import io.github.hoerire.free.ui.component.SwitchPreference
 
 /**
- * 自由传送二级页：两个功能开关 + 长按时长。
+ * 自由传送二级页：两个功能开关 + 触发延迟开关 + 延迟滑杆。
  *
  * 「解除官方白名单限制」与「拖拽时接管成模块自绘的分享面板」是两件独立的事
  *（只解除限制的人不要弹窗，只要弹窗的人未必需要白名单），因此拆成两个平级开关，
  * 各自单独生效。
  *
- * 主设置页的「配置」卡片里只保留一行入口：两个开关与滑杆各占一行会让那张卡多出一块高度，
- * 而两者只在需要时才会调。
+ * 「触发延迟」单独一个开关、默认关闭：它改的是全局
+ * `Settings.Secure.long_press_timeout`，会连带影响桌面长按编辑、文本选择等所有长按判定，
+ * 所以不跟上面两个开关绑定，用户不主动打开就保持原厂 400ms；打开后滑杆才可调。
+ *
+ * 主设置页的「配置」卡片里只保留一行入口：这些开关与滑杆各占一行会让那张卡多出一块高度，
+ * 而它们只在需要时才会调。
  */
 @Composable
 internal fun FreeDragScreen(
@@ -32,6 +36,7 @@ internal fun FreeDragScreen(
     onBack: () -> Unit,
     onFreeDragChange: (Boolean) -> Unit,
     onQuickShareChange: (Boolean) -> Unit,
+    onDragLongPressEnabledChange: (Boolean) -> Unit,
     onDragLongPressChange: (Int) -> Unit,
 ) {
     val context = LocalContext.current
@@ -73,11 +78,30 @@ internal fun FreeDragScreen(
                         )
                     },
                 )
+                SwitchPreference(
+                    checked = state.settings.dragLongPressEnabled,
+                    onCheckedChange = onDragLongPressEnabledChange,
+                    title = stringResource(R.string.drag_long_press_toggle_title),
+                    summary =
+                        if (state.settings.dragLongPressEnabled) {
+                            stringResource(R.string.drag_long_press_toggle_on)
+                        } else {
+                            stringResource(R.string.drag_long_press_toggle_off)
+                        },
+                    enabled = usable,
+                    startAction = {
+                        PreferenceIcon(
+                            ImageVector.vectorResource(R.drawable.ic_trigger_delay),
+                            usable,
+                        )
+                    },
+                )
                 RemoteDpSliderPreference(
                     icon = ImageVector.vectorResource(R.drawable.ic_trigger_delay),
                     confirmedValue = state.settings.dragLongPressMs,
                     isUpdating = state.isUpdating,
-                    enabled = usable && (state.settings.freeDragEnabled || state.settings.quickShareEnabled),
+                    // 开关关着时滑条只读：此时系统阈值保持原厂 400ms，滑条动了也不会生效。
+                    enabled = usable && state.settings.dragLongPressEnabled,
                     title = stringResource(R.string.drag_long_press_title),
                     summary = stringResource(R.string.drag_long_press_summary),
                     minDp = ModulePreferences.MIN_DRAG_LONG_PRESS_MS,

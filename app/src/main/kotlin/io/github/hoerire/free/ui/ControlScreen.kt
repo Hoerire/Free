@@ -5,7 +5,6 @@ import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
@@ -83,9 +82,7 @@ internal fun ControlScreen(
 ) {
     val featuresEnabled = state.settingsEditable && state.settings.enabled
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val windowWidth = maxWidth
-        val sidePadding = maxOf(ScreenHorizontalMargin, (windowWidth - ScreenContentMaxWidth) / 2)
+    Box(modifier = Modifier.fillMaxSize()) {
         HomeScaffold(
             title = stringResource(R.string.app_name),
             overlay = {
@@ -151,8 +148,8 @@ private fun EntryCard(
             enabled = featuresEnabled,
             startAction = { PreferenceIcon(Icons.Rounded.Block, featuresEnabled) },
         )
-        // 自由传送原本是独立卡片（开关 + 长按时长两条），并进这张卡后只留一行入口，
-        // 具体的两个功能开关与滑杆都在二级页里。
+        // 气泡与自由传送原本各是独立卡片，并进这张卡后只留一行入口，
+        // 具体开关与滑杆都在各自的二级页里。
         ArrowPreference(
             title = stringResource(R.string.bubble_feature_title),
             summary = stringResource(R.string.bubble_feature_summary),

@@ -44,7 +44,7 @@ internal class BubbleCoordinator(
     private val placement = BubblePlacementStore(context)
     private val windows = BubbleWindowHost(::log)
     private val environment = BubbleEnvironmentGate(context)
-    private val payloads = BubblePayloadFactory(context) { code, throwable -> log(code, throwable) }
+    private val payloads = BubblePayloadFactory(context)
     private val launcher = BubbleLauncher(context) { code, throwable -> log(code, throwable) }
 
     @Volatile

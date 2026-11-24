@@ -34,7 +34,6 @@ internal class ColorOsWindowGestures(
     private val controller: Any,
     private val configuration: ProcessConfiguration,
     private val handler: Handler,
-    private val logger: (priority: Int, code: String, throwable: Throwable?) -> Unit,
 ) {
     private val longPressTimeout = ViewConfiguration.getLongPressTimeout().toLong()
     private var pressedTask: Any? = null

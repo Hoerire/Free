@@ -19,12 +19,6 @@ internal object SystemMotion {
     const val EMPHASIZED_DECELERATE_X2 = 0.1f
     const val EMPHASIZED_DECELERATE_Y2 = 1f
 
-    /** Material 3 强调型加速曲线。 */
-    const val EMPHASIZED_ACCELERATE_X1 = 0.3f
-    const val EMPHASIZED_ACCELERATE_Y1 = 0f
-    const val EMPHASIZED_ACCELERATE_X2 = 0.8f
-    const val EMPHASIZED_ACCELERATE_Y2 = 0.15f
-
     /** 当前系统动画时长缩放；读不到时按 1 处理。 */
     fun durationScale(): Float =
         try {

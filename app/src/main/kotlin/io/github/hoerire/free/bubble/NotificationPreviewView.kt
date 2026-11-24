@@ -90,7 +90,7 @@ internal class NotificationPreviewView(
     private val timeoutAction = Runnable { dismiss() }
 
     init {
-        overlayBaseColor = MaterialPalette.resolve(context).surfaceContainerHigh
+        overlayBaseColor = MaterialPalette.surfaceContainerHigh(context)
         horizontalPadding = dp(10f)
         iconSlotWidth = if (icon == null) 0 else dp(44f)
 
@@ -175,15 +175,6 @@ internal class NotificationPreviewView(
         params.layoutInDisplayCutoutMode =
             WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         params.setTitle("Bubble notification content")
-    }
-
-    /** 配置变化时实时更新已显示浮层的不透明度（不透明度更低则更透出下层）。 */
-    fun updateFinalAlpha(percent: Int) {
-        finalAlpha = clamp(percent, 35, 100) / 100f
-        if (dismissing || !attached) return
-        params.alpha = finalAlpha
-        updateLayout()
-        if (entranceAnimator?.isRunning == true) return // 入场动画会自然收敛到新值
     }
 
     /** 适配内容，但不改变落点求解器定下的高度。 */
@@ -906,13 +897,6 @@ internal class NotificationPreviewView(
         } else {
             1f - Math.pow((-2f * progress + 2f).toDouble(), 3.0).toFloat() / 2f
         }
-
-    private fun overshoot(progress: Float): Float {
-        val tension = 0.72f
-        val shifted = progress - 1f
-        return 1f + (tension + 1f) * shifted * shifted * shifted +
-            tension * shifted * shifted
-    }
 
     private fun dp(value: Float): Int =
         Math.round(value * resources.displayMetrics.density)

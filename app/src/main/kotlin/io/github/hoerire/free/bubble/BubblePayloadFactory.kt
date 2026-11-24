@@ -18,10 +18,7 @@ import android.text.TextUtils
  * 分身通知用该用户的 LauncherApps 取 badged icon，主应用与分身因此看起来是同一个
  * 应用、不同实例。任何一步失败都退回下一级，绝不抛异常给通知监听线程。
  */
-internal class BubblePayloadFactory(
-    private val context: Context,
-    private val logger: (code: String, throwable: Throwable?) -> Unit,
-) {
+internal class BubblePayloadFactory(private val context: Context) {
     private val density: Int
         get() = context.resources.displayMetrics.densityDpi
 

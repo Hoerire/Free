@@ -27,11 +27,6 @@ internal object OemReflection {
         return runCatching { field.get(instance) }.getOrNull()
     }
 
-    fun readStaticField(type: Class<*>, name: String): Any? {
-        val field = findField(type, name) ?: return null
-        return runCatching { field.get(null) }.getOrNull()
-    }
-
     fun writeField(instance: Any?, name: String, value: Any?): Boolean {
         if (instance == null) return false
         val field = findField(instance.javaClass, name) ?: return false

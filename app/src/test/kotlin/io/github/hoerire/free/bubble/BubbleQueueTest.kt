@@ -122,6 +122,5 @@ class BubbleQueueTest {
             identity = BubbleIdentity(packageName, userId, key),
             payload = BubblePayload(null, null, packageName, "title", body),
             contentIntent = null,
-            postedAt = 0L,
         )
 }

@@ -6,7 +6,7 @@ import io.github.hoerire.free.log.ModuleLog
 import io.github.hoerire.free.log.VerboseLog
 
 /**
- * 自由拖拽：解除内容传送门的长按拖拽准入限制。
+ * 自由传送·解除限制：解除内容传送门的长按拖拽准入限制。
  *
  * 反编译结论（oplus-services.jar / oplus-framework.jar）：
  *   应用进程 bind 时 OplusViewDragSystemServer#preBindApplication 向
@@ -298,7 +298,7 @@ internal class FreeDragHookInstaller(
         const val MAX_APPEND_ACTIVITIES = 8
 
         /**
-         * 不参与自由拖拽的包。
+         * 不参与「解除限制」的包。
          *
          * 桌面与系统界面以长按承担排序/编辑操作，其图标大量由 ImageView/TextView 承载；
          * 纳入白名单会与系统自身的长按手势冲突。设置页同理，长按条目易被误触。

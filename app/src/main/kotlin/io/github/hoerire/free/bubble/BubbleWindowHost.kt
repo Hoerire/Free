@@ -61,10 +61,6 @@ internal class BubbleWindowHost(private val logger: (code: String, throwable: Th
         runCatching { overlay.dismiss() }
     }
 
-    fun forgetStack(overlay: BubbleStackOverlay) {
-        if (stackView === overlay) stackView = null
-    }
-
     fun showPreview(overlay: NotificationPreviewView, anchor: Rect, position: Int, timeout: Int): Boolean {
         val shown =
             runCatching { overlay.show(anchor, position, timeout) }.getOrElse {
@@ -85,16 +81,5 @@ internal class BubbleWindowHost(private val logger: (code: String, throwable: Th
         runCatching {
             if (animated) overlay.dismiss() else overlay.removeImmediately()
         }
-    }
-
-    /** 页面被系统关闭（锁屏、切用户）时一次性收回，不走动画。 */
-    fun dismissAllImmediately() {
-        val bubble = bubbleView
-        bubbleView = null
-        stackView = null
-        val preview = previewView
-        previewView = null
-        runCatching { preview?.removeImmediately() }
-        runCatching { bubble?.removeImmediately() }
     }
 }

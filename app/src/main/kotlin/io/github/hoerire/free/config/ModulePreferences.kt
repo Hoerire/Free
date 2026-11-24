@@ -212,17 +212,10 @@ internal object ModulePreferences {
     const val KEY_RADIAL_INTERACTION_ENABLED = "radial_interaction_enabled_v1"
 
     /**
-     * 选中光圈：滑选到某个条目时，在图标外沿画一圈白色高亮。
+     * 流光特效：选中项外沿的白色光圈、星头与运动轨迹（一直在转的动效）。
      *
-     * 圈宽由选中进度驱动（0 → 环宽），与图标放大一起构成选中反馈；
-     * 关掉后只剩下放大。
-     */
-
-    /**
-     * 流光特效：选中项外沿那圈常亮光圈、星头与运动轨迹。
-     *
-     * 与「选中光圈」是两个独立开关：光圈是不动的细白边 + 投影，
-     * 流光是一直在转的动效，可以只开其中一个。
+     * 选中反馈的其余部分（选中放大、外顶距离）在 [KEY_RADIAL_SHIMMER] 里，
+     * 关掉本开关只停动效，几何反馈照旧。
      */
     const val KEY_RADIAL_SHIMMER_ENABLED = "radial_shimmer_enabled_v1"
 
@@ -252,6 +245,17 @@ internal object ModulePreferences {
     /** 快速分享：拖拽时弹出模块自绘的分享面板，代替官方面板。 */
     const val KEY_QUICK_SHARE = "quick_share_enabled"
     const val DEFAULT_QUICK_SHARE = false
+
+    /**
+     * 是否允许调整触发延迟（默认关闭）。
+     *
+     * 关闭时**不写**系统长按阈值，应用侧看到的仍是原厂 400ms；打开后才按
+     * [KEY_DRAG_LONG_PRESS_MS] 改写。做成独立开关是因为改写的是全局
+     * `Settings.Secure.long_press_timeout`：它同时影响桌面图标长按编辑、文本选择等
+     * 所有长按判定，用户不主动要就不该被动改。
+     */
+    const val KEY_DRAG_LONG_PRESS_ENABLED = "drag_long_press_enabled_v1"
+    const val DEFAULT_DRAG_LONG_PRESS_ENABLED = false
 
     /** 拖拽触发延迟：系统长按阈值（毫秒），默认 400 即官方行为。 */
     const val KEY_DRAG_LONG_PRESS_MS = "drag_long_press_ms_v1"
@@ -445,12 +449,6 @@ internal object ModulePreferences {
             .distinct()
             .take(MAX_BUBBLE_WHITELIST)
             .joinToString("\n")
-
-    /** 分身键的 userId 部分；主应用键返回 null。 */
-    fun bubbleKeyUserId(key: String): Int? =
-        key.substringAfter('#', "").toIntOrNull()?.takeIf { it > 0 }
-
-    fun bubbleKeyPackage(key: String): String = key.substringBefore('#')
 
     private val BUBBLE_KEY_PATTERN = Regex("[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)+(?:#[1-9][0-9]{0,5})?")
 

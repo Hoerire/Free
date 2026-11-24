@@ -496,13 +496,6 @@ internal class ImmediateSuggestionController(
         handler.postDelayed(fallback, NATIVE_CLIPBOARD_GRACE_MS)
     }
 
-    fun onNativeClipboardSuggestionObserved() {
-        val fallback = pendingClipboardFallback ?: return
-        handler.removeCallbacks(fallback)
-        pendingClipboardFallback = null
-        host.dismissSuggestion(TYPE_CLIPBOARD)
-    }
-
     private fun showIntentSuggestion(
         id: String,
         intent: Intent,

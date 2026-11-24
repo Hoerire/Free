@@ -279,8 +279,6 @@ internal class ColorOsAllAppsContent(loader: ClassLoader, target: ColorOsSidebar
         }
     }
 
-    fun logEvent(code: String) = panelLog(code)
-
     /** 详细日志：面板里的工具/快捷方式启动结果。 */
     private fun panelLog(code: String) {
         io.github.hoerire.free.log.ModuleLog.debug("FFLAUNCH") { code }

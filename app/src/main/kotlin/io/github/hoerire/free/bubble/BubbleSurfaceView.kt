@@ -243,17 +243,6 @@ internal class BubbleSurfaceView(
         invalidate()
     }
 
-    /**
-     * 调整气泡内通知图标的尺寸。[percent] 相对历史上的 20dp 半径，
-     * 取 100 即保持原观感。
-     */
-    fun setIconScalePercent(percent: Int) {
-        val next = clampIconPercent(percent) / 100f
-        if (Math.abs(next - iconScale) < 0.001f) return
-        iconScale = next
-        invalidate()
-    }
-
     private fun clampIconPercent(percent: Int): Int = Math.max(
         BubbleMetrics.MIN_ICON_SIZE_PERCENT,
         Math.min(BubbleMetrics.MAX_ICON_SIZE_PERCENT, percent),
@@ -263,55 +252,6 @@ internal class BubbleSurfaceView(
         BubbleMetrics.MIN_BUBBLE_SIZE_PERCENT,
         Math.min(BubbleMetrics.MAX_BUBBLE_SIZE_PERCENT, percent),
     )
-
-    fun getBubbleSizePx(): Int = viewSize
-
-    /**
-     * 以当前中心缩放整颗气泡（玻璃核心、通知图标与应用角标）。
-     * 100 保持原来的 92dp 窗口。气泡已挂出时即时生效，
-     * 设置页预览则用未挂出的实例。
-     */
-    fun setBubbleSizePercent(percent: Int) {
-        val next = clampBubblePercent(percent) / 100f
-        if (Math.abs(next - bubbleScale) < 0.001f) return
-        val oldSize = viewSize
-        bubbleScale = next
-        viewSize = Math.round(designSize * bubbleScale)
-        params.width = viewSize
-        params.height = viewSize
-        val delta = Math.round((oldSize - viewSize) / 2f)
-        if (dockedEdge < 0) {
-            params.x = -viewSize / 2
-        } else if (dockedEdge > 0) {
-            params.x = screenWidth - viewSize / 2
-        } else {
-            params.x += delta
-        }
-        params.y += delta
-        if (imeAvoiding) imeRestoreY += delta
-        val wm = windowManager
-        if (attached && wm != null) {
-            refreshSafeBounds()
-            try {
-                wm.updateViewLayout(this, params)
-                if (dockedEdge != 0) startDockBreathing()
-            } catch (ignored: Throwable) {
-                // 窗口可能正处于重建间隙；下一次 show 会重新应用。
-            }
-        }
-        requestLayout()
-        invalidate()
-        // 让已挂出的浮层（通知内容卡）立刻按新的直径重新锚定、重新适配。
-        layoutChangedAction?.invoke()
-    }
-
-    /** 调整右下角应用角标；100 保持原来的 16dp。 */
-    fun setBadgeScalePercent(percent: Int) {
-        val next = clampBadgePercent(percent) / 100f
-        if (Math.abs(next - badgeSizeScale) < 0.001f) return
-        badgeSizeScale = next
-        invalidate()
-    }
 
     private fun clampBadgePercent(percent: Int): Int = Math.max(
         BubbleMetrics.MIN_BADGE_SIZE_PERCENT,
@@ -391,16 +331,6 @@ internal class BubbleSurfaceView(
     fun setStackCount(count: Int) {
         stackedCount = Math.max(0, count)
         invalidate()
-    }
-
-    fun getStackBadgeBounds(): Rect {
-        val radius = Math.round(dp(12f) * bubbleScale)
-        val centerX = params.x + Math.round(stackBadgeCenterX() * bubbleScale)
-        val centerY = params.y + Math.round((designSize / 2f - dp(22f)) * bubbleScale)
-        return Rect(
-            centerX - radius, centerY - radius,
-            centerX + radius, centerY + radius,
-        )
     }
 
     fun setStackExpanded(expanded: Boolean) {

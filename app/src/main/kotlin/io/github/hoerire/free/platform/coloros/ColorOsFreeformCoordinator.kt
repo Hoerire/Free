@@ -96,7 +96,7 @@ internal class ColorOsFreeformCoordinator(
         centerPlacement = { lastSettings.zoomMaxWindowCountEffective == 1 },
     )
     private val windowGestures =
-        ColorOsWindowGestures(context, controller, configuration, handler, logger)
+        ColorOsWindowGestures(context, controller, configuration, handler)
     private val sidebar = ColorOsSidebarClient(context, handler, logger)
     private val appCatalog =
         ColorOsAppCatalog(context, catalogExecutor, logger) { snapshot ->
@@ -2640,11 +2640,7 @@ internal class ColorOsFreeformCoordinator(
         /** 读不到系统导航栏高度时的兜底值（dp）。 */
         const val BOTTOM_GESTURE_INSET_DP = 40f
 
-
-
-
-        /** WindowManager.LayoutParams.TOUCHABLE_INSETS_REGION 是 @hide 常量。 */
-        const val TOUCHABLE_INSETS_REGION = 3
+        /** 预热浮层的最长存活时间：超时没等到键盘就撤掉，不留空窗口。 */
         const val OVERLAY_PREWARM_LIFETIME_MS = 400L
         // 窗口层级取值：APPLICATION_OVERLAY=111000，INPUT_METHOD=131000。
         // 用 APPLICATION_OVERLAY 时键盘一弹出就盖住扇形，故选输入法对话框层（141000），

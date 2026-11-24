@@ -1016,16 +1016,6 @@ internal class ActivityStarterZoomInjector(
         /** system_server 代发启动时的发起包名。 */
         const val SYSTEM_SERVER_PACKAGE = "android"
 
-        /**
-         * 由 system_server 直接启动、且不属于用户安装应用的目标。
-         *
-         * 系统通知的落点常常是系统包（例如经 shell 转发的入口），不会命中
-         * 「第三方应用」判据，因此按实际落点单独登记。第三方应用由同一分支的
-         * 另一条判据覆盖，无需列入此处。
-         */
-        val SYSTEM_NOTIFICATION_TARGETS = setOf("org.lsposed.manager", "com.android.shell")
-
-
         /** 代表其它应用转交启动的系统服务。 */
         val PENDING_DISPATCH_PACKAGES = setOf("android.ext.services")
 

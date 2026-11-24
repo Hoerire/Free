@@ -284,12 +284,6 @@ internal class OutsideTapCloseHookInstaller(
                     configuration.forceReload()
                 }
                 if (isFloatExit && configuration.snapshot.autoCloseWindowEffective) {
-                    // 应用内转为小窗时，ColorOS 17 同样会执行一次退场裁决，且退出对象为
-                    // 刚创建的窗口本身。该情形予以放行：关闭该窗口等同于窗口一建立即消失，
-                    // 与「自动收窗」所处理的「旧窗口被挤出」并非同一语义。
-                    var exitingTask = strategy?.let { exiting ->
-                        fieldInHierarchy(exiting.javaClass, "mTask")?.get(exiting)
-                    }
                     val frames = Throwable().stackTrace
                     // 系统的「谁该退出」判定有两条入口：超出数量上限（updateTaskMaxNum* /
                     // handleFlexibleExChange）与统一裁决（determineFlexibleTaskToExit /
@@ -610,17 +604,6 @@ internal class OutsideTapCloseHookInstaller(
             )
         private val isIgnoreExpandRegion =
             controllerClass.requiredMethod("isIgnoreExpandRegion", 1)
-        private val exitFlexibleTask =
-            controllerClass.requiredMethod(
-                name = "exitFlexibleTask",
-                parameterTypes =
-                    arrayOf(
-                        taskClass,
-                        Boolean::class.javaPrimitiveType!!,
-                        Int::class.javaPrimitiveType!!,
-                        Int::class.javaPrimitiveType!!,
-                    ),
-            )
         private val getDisplayContent = taskClass.requiredMethod("getDisplayContent", 0)
         private val getDisplayBounds = displayContentClass.requiredMethod("getBounds", 0)
         private val isWindowVisible = windowStateClass.requiredMethod("isVisible", 0)

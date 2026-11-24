@@ -278,7 +278,6 @@ internal class ColorOsFreeformLauncher(
         }
     private companion object {
         const val FLEXIBLE_WINDOWING_MODE = 100
-        const val ZOOM_LAUNCH_FLAG = 4
         const val LAUNCH_DISPLAY_KEY = "android.activity.launchDisplayId"
         const val ZOOM_FLAGS_KEY = "android:activity.mZoomLaunchFlags"
         const val EXTRA_WINDOW_MODE_KEY = "extra_window_mode"

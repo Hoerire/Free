@@ -11,7 +11,6 @@ import android.view.InputDevice
 import android.view.InputEvent
 import android.view.InputEventReceiver
 import android.view.MotionEvent
-import io.github.libxposed.api.XposedModule
 import io.github.hoerire.free.config.ModuleSettingsSnapshot
 import io.github.hoerire.free.gesture.CornerGestureEngine
 import io.github.hoerire.free.gesture.CornerSide
@@ -30,10 +29,7 @@ import io.github.hoerire.free.gesture.CornerTriggerRegion
  *
  * 需要 `android.permission.MONITOR_INPUT`（SystemUI 已授予）。
  */
-internal class CornerInputPilferMonitor(
-    private val module: XposedModule,
-    private val configuration: ProcessConfiguration,
-) {
+internal class CornerInputPilferMonitor(private val configuration: ProcessConfiguration) {
     private val environmentState = ModuleEnvironmentState(configuration) { code, exception ->
         ModuleLog.warn(code, exception)
     }

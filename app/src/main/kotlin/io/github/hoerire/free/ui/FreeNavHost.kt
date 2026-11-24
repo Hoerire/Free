@@ -54,7 +54,7 @@ internal sealed interface AppRoute {
     /** 选中特效二级页：光圈 / 流光 / 选中放大，流光参数再往里一层。 */
     object RadialEffect : AppRoute
 
-    /** 自由传送二级页：总开关 + 长按时长。 */
+    /** 自由传送二级页：解除限制 / 快速分享 / 触发延迟三个开关 + 延迟滑杆。 */
     object FreeDrag : AppRoute
 
     /** 手势交互二级页：快速上滑 / 长按静音 / 关闭方式。 */
@@ -109,6 +109,7 @@ internal fun FreeNavHost(
     onVerboseLogChange: (Boolean) -> Unit,
     onFreeDragChange: (Boolean) -> Unit,
     onQuickShareChange: (Boolean) -> Unit,
+    onDragLongPressEnabledChange: (Boolean) -> Unit,
     onDragLongPressChange: (Int) -> Unit,
     onZoomMaxWindowCountChange: (Int) -> Unit,
     onZoomAllowAnyAppChange: (Boolean) -> Unit,
@@ -300,6 +301,7 @@ internal fun FreeNavHost(
                     onBack = popBackStack,
                     onFreeDragChange = onFreeDragChange,
                     onQuickShareChange = onQuickShareChange,
+                    onDragLongPressEnabledChange = onDragLongPressEnabledChange,
                     onDragLongPressChange = onDragLongPressChange,
                 )
             AppRoute.RadialEffect ->

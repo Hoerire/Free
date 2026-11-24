@@ -191,7 +191,6 @@ internal class SystemServerGestureMonitor(
     private companion object {
         const val MONITOR_TAG = "Free"
         const val THREAD_NAME = "Free-corner-system"
-        const val MOVE_TRACE_INTERVAL = 30L
         val INPUT_MONITOR_CLASS: Class<*> = Class.forName("android.view.InputMonitor")
     }
 }

@@ -82,6 +82,7 @@ class MainActivity : ComponentActivity() {
                     onVerboseLogChange = repository::setVerboseLogEnabled,
                     onFreeDragChange = repository::setFreeDragEnabled,
                     onQuickShareChange = repository::setQuickShareEnabled,
+                    onDragLongPressEnabledChange = repository::setDragLongPressEnabled,
                     onDragLongPressChange = repository::setDragLongPressMs,
                     onZoomMaxWindowCountChange = repository::setZoomMaxWindowCount,
                     onZoomAllowAnyAppChange = repository::setZoomAllowAnyApp,

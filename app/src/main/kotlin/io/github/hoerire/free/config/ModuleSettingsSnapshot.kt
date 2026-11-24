@@ -104,6 +104,8 @@ internal data class ModuleSettingsSnapshot(
     val freeDragEnabled: Boolean = ModulePreferences.DEFAULT_FREE_DRAG,
     /** 快速分享：拖拽时弹出模块自绘的分享面板，代替官方面板。 */
     val quickShareEnabled: Boolean = ModulePreferences.DEFAULT_QUICK_SHARE,
+    /** 是否允许调整触发延迟；关闭时系统长按阈值保持原厂值。 */
+    val dragLongPressEnabled: Boolean = ModulePreferences.DEFAULT_DRAG_LONG_PRESS_ENABLED,
     /** 拖拽触发延迟：系统长按阈值（毫秒），400 即官方行为。 */
     val dragLongPressMs: Int = ModulePreferences.DEFAULT_DRAG_LONG_PRESS_MS,
 
@@ -212,11 +214,25 @@ internal data class ModuleSettingsSnapshot(
     /** 快速分享是否生效：模块总开关 ×「快速分享」。 */
     val quickShareActive: Boolean get() = enabled && quickShareEnabled
 
+    /**
+     * 「触发延迟」是否生效：模块总开关 × 该开关。
+     *
+     * 关闭时不要写系统长按阈值（见 `LongPressTimeoutHook`）：
+     * 这个值是全局的，改了会连带影响所有长按判定。
+     */
+    val dragLongPressActive: Boolean get() = enabled && dragLongPressEnabled
+
+    /** 实际写入系统的长按阈值；未生效时一律是原厂默认值。 */
+    val dragLongPressMsEffective: Int
+        get() =
+            if (dragLongPressActive) {
+                ModulePreferences.coerceDragLongPressMs(dragLongPressMs)
+            } else {
+                ModulePreferences.DEFAULT_DRAG_LONG_PRESS_MS
+            }
+
     /** 气泡通知是否生效：模块总开关 ×「气泡通知」。 */
     val bubbleActive: Boolean get() = enabled && bubbleEnabled
-
-    /** 内容浮层是否生效：气泡生效 ×「内容浮层」。 */
-    val bubblePreviewActive: Boolean get() = bubbleActive && bubblePreviewEnabled
 
     /** 状态栏滚动：独立开关，不看气泡通知与「应用范围」名单；只跟模块总开关走。 */
     val statusScrollActive: Boolean get() = enabled && statusScrollEnabled
@@ -330,6 +346,7 @@ internal data class ModuleSettingsSnapshot(
             )
             .putBoolean(ModulePreferences.KEY_FREE_DRAG, freeDragEnabled)
             .putBoolean(ModulePreferences.KEY_QUICK_SHARE, quickShareEnabled)
+            .putBoolean(ModulePreferences.KEY_DRAG_LONG_PRESS_ENABLED, dragLongPressEnabled)
             .putInt(
                 ModulePreferences.KEY_DRAG_LONG_PRESS_MS,
                 ModulePreferences.coerceDragLongPressMs(dragLongPressMs),
@@ -738,6 +755,10 @@ internal data class ModuleSettingsSnapshot(
                 quickShareEnabled = preferences.getBoolean(
                     ModulePreferences.KEY_QUICK_SHARE,
                     ModulePreferences.DEFAULT_QUICK_SHARE,
+                ),
+                dragLongPressEnabled = preferences.getBoolean(
+                    ModulePreferences.KEY_DRAG_LONG_PRESS_ENABLED,
+                    ModulePreferences.DEFAULT_DRAG_LONG_PRESS_ENABLED,
                 ),
                 dragLongPressMs = preferences.getInt(
                     ModulePreferences.KEY_DRAG_LONG_PRESS_MS,

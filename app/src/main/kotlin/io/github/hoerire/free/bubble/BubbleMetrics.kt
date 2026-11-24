@@ -33,9 +33,6 @@ internal interface BubbleVisualConfig {
 
 /** 视觉层共用的数值基准；单位一律 dp，绘制时再乘密度。 */
 internal object BubbleMetrics {
-    /** 设计空间边长：一整颗气泡的窗口大小。 */
-    const val DESIGN_DP = 92f
-
     const val DEFAULT_PORTRAIT_X = 88
     const val DEFAULT_PORTRAIT_Y = 88
     const val DEFAULT_LANDSCAPE_X = 92
@@ -55,7 +52,4 @@ internal object BubbleMetrics {
     const val CONTENT_AUTO = 0
     const val CONTENT_ABOVE = 1
     const val CONTENT_BELOW = 2
-
-    /** 预留：屏幕内侧位置。[NotificationPreviewView.resolvePlacement] 尚未实现该分支。 */
-    const val CONTENT_INWARD = 3
 }

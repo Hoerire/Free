@@ -198,7 +198,7 @@ internal class PortalTapLegacy(
                         android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
                         android.content.res.Configuration.UI_MODE_NIGHT_YES
                     // 配色与应用主题一致：浅色用卡片白，深色用深色卡片面；
-                    // 圆角取主题里的 26dp 档，否则这块面板仍留在旧视觉体系里。
+                    // 圆角取主题卡片那一档（[PANEL_CORNER_DP]），否则这块面板仍留在旧视觉体系里。
                     // 底色取应用页面骨架的分组背景，不透明：面板下面是别的应用的内容，
                     // 取不到那层像素做真实背景，加透明度只会让文字发灰。
                     val surface = if (night) SURFACE_DARK else SURFACE_LIGHT
@@ -430,11 +430,5 @@ internal class PortalTapLegacy(
         /** 与应用主题卡片同一档圆角（COUI Card 默认 24dp）。 */
         const val PANEL_CORNER_DP = 24
 
-        /** 设计尺寸：格子宽高、内边距、圆角与最大行数。 */
-        const val CELL_WIDTH_DP = 80
-        const val CELL_HEIGHT_DP = 96
-        const val PADDING_DP = 8
-        const val RADIUS_DP = 20
-        const val MAX_ROWS = 3
     }
 }

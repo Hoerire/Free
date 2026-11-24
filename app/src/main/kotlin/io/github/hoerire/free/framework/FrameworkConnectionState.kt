@@ -15,9 +15,6 @@ internal data class FrameworkConnectionState(
     val isRequestingScope: Boolean = false,
     val issue: FrameworkConnectionIssue? = null,
 ) {
-    val moduleEnabled: Boolean
-        get() = settings.enabled
-
     val missingScopes: Set<String>
         get() = REQUIRED_SCOPES - grantedScopes
 

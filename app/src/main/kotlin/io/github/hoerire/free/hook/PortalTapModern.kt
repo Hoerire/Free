@@ -562,12 +562,6 @@ internal class PortalTapModern(
                     serviceInfo.isAssignableFrom(it.returnType)
             }
             val launchName = profile?.launchMethod ?: return
-            // 点击时按 ViewHolder 的实时位置取项，绑定时的位置在列表回收后会漂移。
-            val positionGetter = holderType.methods.firstOrNull {
-                it.parameterCount == 0 && it.returnType == Int::class.javaPrimitiveType &&
-                    (it.name == "getAbsoluteAdapterPosition" || it.name == "getBindingAdapterPosition" ||
-                        it.name == "getAdapterPosition")
-            }
             itemBinderHooked = true
             hook(bind, "item") { chain ->
                 val result = chain.proceed()

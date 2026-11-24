@@ -77,7 +77,7 @@ internal class SystemUiHookInstaller(
                         // 宁可保留这个缺陷，也不能让低版用户的系统界面崩。
                         if (RomFlavor.isColorOs17OrNewer) {
                             runCatching {
-                                CornerInputPilferMonitor(module, configuration).start(context)
+                                CornerInputPilferMonitor(configuration).start(context)
                             }.onSuccess {
                                 io.github.hoerire.free.log.ModuleLog.info(
                                     "SYSTEMUI_CORNER_SPY_STARTED",

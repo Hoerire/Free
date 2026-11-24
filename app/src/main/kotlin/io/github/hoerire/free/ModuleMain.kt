@@ -100,9 +100,17 @@ class ModuleMain : XposedModule() {
                     "_bl" + settings.blacklistPackages.size +
                     // 「禁用浮窗」的条目数。
                     "_zx" + settings.zoomExcludedPackages.size +
-                    // 改写系统拖拽准入（解除限制）与接管面板（快速分享）的两个开关。
+                    // 改写系统拖拽准入（解除限制）与接管面板（快速分享）的两个开关，
+                    // 以及「触发延迟」是否接管系统长按阈值（关闭时系统保持原厂 400ms）。
                     "_fd" + settings.freeDragActive +
-                    "_qs" + settings.quickShareActive
+                    "_qs" + settings.quickShareActive +
+                    "_dlp" + settings.dragLongPressActive +
+                    "_dlpMs" + settings.dragLongPressMsEffective +
+                    // 返回增强：方向触发的开关与滑动距离（dp）。
+                    "_pb" + settings.predictiveBackEffective +
+                    "_pbDp" + settings.predictiveBackSwipeDistanceDpEffective +
+                    // 气泡「只通知模式」：开启后气泡不接收触摸、到点直接消失。
+                    "_noti" + settings.bubbleNoticeOnly
             }
         }
         // 从这里开始进入安装阶段：关闭详细日志时，每一步安装只累计数量，结束时汇总一行；

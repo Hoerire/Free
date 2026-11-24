@@ -2,7 +2,6 @@ package io.github.hoerire.free.bubble
 
 import android.app.PendingIntent
 import android.graphics.drawable.Drawable
-import android.os.SystemClock
 
 /** 一条通知在气泡里需要的全部内容；由 [BubblePayloadFactory] 一次算好。 */
 internal data class BubblePayload(
@@ -26,7 +25,6 @@ internal data class BubbleItem(
     val timeoutOverride: Int? = null,
     /** 建议 id（如 flashlight / clipboard:phone）；普通通知为 null。 */
     val suggestionId: String? = null,
-    val postedAt: Long = SystemClock.elapsedRealtime(),
 ) {
     val notificationKey: String? get() = identity.notificationKey
     val packageName: String get() = identity.packageName
