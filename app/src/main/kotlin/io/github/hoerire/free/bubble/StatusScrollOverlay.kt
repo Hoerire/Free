@@ -4,18 +4,20 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
-import android.text.TextUtils
+import android.text.TextPaint
+import io.github.hoerire.free.config.ModulePreferences
 import io.github.hoerire.free.log.ModuleLog
 import android.util.TypedValue
+import android.view.Choreographer
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.PathInterpolator
 import android.widget.LinearLayout
 import android.widget.TextView
 import java.util.Locale
@@ -27,7 +29,7 @@ import java.util.Locale
  */
 internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
     private val handler = Handler(Looper.getMainLooper())
-    private val ticker: FadingTickerView = FadingTickerView(context)
+    private val ticker: TickerView = TickerView(context)
     private var attached = false
     private var hasText = false
     private var host: ViewGroup? = null
@@ -38,11 +40,19 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
     private val hiddenPeers = ArrayList<View>()
     private val hiddenPeerVisibility = ArrayList<Int>()
     private val removeAction = Runnable { removeImmediately() }
-    private val pageAdvanceAction = Runnable { advancePage() }
+    private val scrollFrame = Choreographer.FrameCallback { stepScroll() }
     private val overlayKeepAliveAction = Runnable { keepOverlayAlive() }
-    private val textPages = ArrayList<String>()
-    private var pageIndex = 0
     private var contentWidth = 0
+    /** 期望的摆放位置（相对状态栏宿主），宿主如果把子视图摆到别处要按这个纠正。 */
+    private var viewportLeft = 0
+    private var viewportTop = 0
+    private var viewportWidth = 1
+    private var viewportHeight = 1
+    private var measuredTextWidth = 0f
+    private var scrollOffset = 0f
+    private var scrollActive = false
+    private var scrollPxPerSecond = ModulePreferences.DEFAULT_STATUS_SCROLL_SPEED.toFloat()
+    private var lastScrollStepAt = 0L
     private var fullText = ""
     private var shownAt = 0L
     private var displayRounds = 1
@@ -57,30 +67,68 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         // 起点对齐时钟左沿：左侧不留内边距，文字只靠 ticker 自己的 2dp 留白。
         setPadding(0, 0, pad, 0)
         setClipToPadding(true)
-        setClipChildren(false)
+        // 横向滚动靠 translationX 把整条文字移出容器，超出的部分由本容器的
+        // 内边距裁剪挡住，避免画到摄像头挖孔与系统图标上。
+        setClipChildren(true)
         setBackgroundColor(Color.TRANSPARENT)
         visibility = View.VISIBLE
         alpha = 0f
 
 
-        ticker.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
-        ticker.setSingleLine(true)
-        ticker.gravity = Gravity.CENTER_VERTICAL
-        ticker.setEllipsize(TextUtils.TruncateAt.END)
-        ticker.isFocusable = false
-        ticker.setIncludeFontPadding(false)
+        ticker.paint.textSize = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_SP,
+            11f,
+            resources.displayMetrics,
+        )
+        ticker.paint.color = Color.WHITE
         ticker.setPadding(dp(2f), 0, dp(4f), 0)
-        // 文本用 WRAP_CONTENT 而非权重(0,MATCH,1)，避免在 WRAP_CONTENT 容器里塌缩成 0 宽；
-        // 整体也按内容自适应宽度，随状态栏布局自动测量。
-        // ViewOverlay 手工测量/布局时不一定会解析 LinearLayout 的权重，
-        // 所以这里给定一个确定的文本宽度，并在状态栏宿主挂上或重新测量时更新。
-        addView(ticker, LinearLayout.LayoutParams(dp(160f), LinearLayout.LayoutParams.MATCH_PARENT))
+        addView(ticker, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.MATCH_PARENT,
+        ))
     }
 
-    /** 纯文本滚动条：最右侧的字形保持完全不透明。 */
-    private inner class FadingTickerView(context: Context) : TextView(context) {
+    /**
+     * 纯文本滚动条：自己算基线、自己裁可视区，不经过 TextView 的排版。
+     *
+     * TextView 在宽度被父级反复改动时会把 Layout 建在旧宽度上，于是出现
+     * 换行、文字被顶到顶部、只显示一截。这里直接 drawText：基线固定垂直居中、
+     * 横向位移由 [offsetX] 控制，几何完全可控。
+     */
+    private inner class TickerView(context: Context) : View(context) {
+        val paint = TextPaint(Paint.ANTI_ALIAS_FLAG)
+        var text: String = ""
+            set(value) {
+                field = value
+                refreshWidth()
+                invalidate()
+            }
+        var textWidth: Float = 0f
+            private set
+        var offsetX: Float = 0f
+            set(value) {
+                if (field == value) return
+                field = value
+                invalidate()
+            }
+
+        fun refreshWidth() {
+            textWidth = if (text.isEmpty()) 0f else paint.measureText(text)
+        }
+
         override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
+            if (text.isEmpty()) return
+            val metrics = paint.fontMetrics
+            val baseline = height / 2f - (metrics.ascent + metrics.descent) / 2f
+            canvas.save()
+            canvas.clipRect(
+                paddingLeft.toFloat(),
+                0f,
+                (width - paddingRight).toFloat(),
+                height.toFloat(),
+            )
+            canvas.drawText(text, paddingLeft + offsetX, baseline, paint)
+            canvas.restore()
         }
     }
 
@@ -114,21 +162,11 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         val tickerBounds = resolveFluidCloudAvoidance(parent, left, right, top, height)
         left = tickerBounds[0]
         right = tickerBounds[1]
-        val availableWidth = Math.max(1, right - left)
-        val width = availableWidth
+        val width = Math.max(1, right - left)
         val textWidth = Math.max(1, width - paddingLeft - paddingRight)
-        val tickerParams = ticker.layoutParams as LinearLayout.LayoutParams
-        tickerParams.width = textWidth
-        tickerParams.height = LinearLayout.LayoutParams.MATCH_PARENT
-        tickerParams.weight = 0f
-        ticker.layoutParams = tickerParams
-        ticker.visibility = View.VISIBLE
         contentWidth = Math.max(1, textWidth - ticker.paddingLeft - ticker.paddingRight)
-        measure(
-            View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY),
-        )
-        layout(left, top, left + width, top + height)
+        ticker.visibility = View.VISIBLE
+        applyLayout(left, top, width, height)
         visibility = View.VISIBLE
         if (!hasText) alpha = 0f
         if (hasPending) {
@@ -164,7 +202,9 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
             // 滚动进行中可能有新的通知图标视图插入；
             // 每次保活都把它们隐藏，避免与本条重叠。
             hideStatusBarPeers(currentHost)
-            relayoutOverlay()
+            // 滚动进行中不再周期性重排：每 180ms 触发一次 measure/layout
+            // 会让逐帧位移看起来一顿一顿的。几何变化由 onLayout 通知补。
+            if (!scrollActive) relayoutOverlay()
         } catch (ignored: Throwable) {
         }
         scheduleOverlayKeepAlive()
@@ -189,29 +229,56 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         val tickerBounds = resolveFluidCloudAvoidance(currentHost, left, right, top, height)
         left = tickerBounds[0]
         right = tickerBounds[1]
-        val availableWidth = Math.max(1, right - left)
-        val width = availableWidth
+        val width = Math.max(1, right - left)
         val textWidth = Math.max(1, width - paddingLeft - paddingRight)
-        val tickerParams = ticker.layoutParams as LinearLayout.LayoutParams
-        tickerParams.width = textWidth
-        tickerParams.height = LinearLayout.LayoutParams.MATCH_PARENT
-        tickerParams.weight = 0f
-        ticker.layoutParams = tickerParams
         contentWidth = Math.max(1, textWidth - ticker.paddingLeft - ticker.paddingRight)
-        measure(
-            View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY),
-        )
-        layout(left, top, left + width, top + height)
+        applyLayout(left, top, width, height)
         if (hasText) {
             hideStatusBarPeers(currentHost)
             copyClockStyle()
+            // 可视宽度可能变了：按新边界重算文本宽度，并在原进度上继续滚，
+            // 避免打字、旋屏、SystemUI 重建之后位移越界或被清零。
+            updateScrollMetrics()
+            startOrContinueScroll()
         }
-        if (hasText && fullText.isNotEmpty()) {
-            prepareTextPages(fullText)
-            pageIndex = Math.min(pageIndex, Math.max(0, textPages.size - 1))
-            ticker.setText(if (textPages.isEmpty()) fullText else textPages[pageIndex])
+    }
+
+    /**
+     * 宿主重排（打字、旋屏、SystemUI 重建、挖孔避让变化）后同步可视宽度。
+     *
+     * 保活循环在滚动期间不再周期性 relayout（那会让逐帧位移一顿一顿），
+     * 几何变化就靠这里补算，滚动进度不丢。
+     */
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        super.onLayout(changed, l, t, r, b)
+        // 宿主（状态栏的 ViewGroupOverlay）也会排我们，它的坐标不保证等于
+        // 我们自己算的时钟位。这里只把可视宽度同步过来，位置由 applyLayout 负责，
+        // **不要**在 onLayout 里再调 layout() 或改 LayoutParams——那会请求宿主重排，
+        // 反过来把我们摆到 (0,0)，表现就是整条文字被顶到状态栏顶部。
+        val newContentWidth = Math.max(
+            1,
+            (r - l) - paddingLeft - paddingRight - ticker.paddingLeft - ticker.paddingRight,
+        )
+        if (newContentWidth == contentWidth) return
+        contentWidth = newContentWidth
+        if (!hasText) return
+        post {
+            updateScrollMetrics()
+            startOrContinueScroll()
         }
+    }
+
+    /** 统一测量与布局：记录可视区几何，再按精确宽度摆放。 */
+    private fun applyLayout(left: Int, top: Int, width: Int, height: Int) {
+        viewportLeft = left
+        viewportTop = top
+        viewportWidth = Math.max(1, width)
+        viewportHeight = Math.max(1, height)
+        measure(
+            View.MeasureSpec.makeMeasureSpec(viewportWidth, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(viewportHeight, View.MeasureSpec.EXACTLY),
+        )
+        layout(left, top, left + viewportWidth, top + viewportHeight)
     }
 
     /** 查找状态栏时钟，并让本组件实时跟随其着色变化。 */
@@ -537,23 +604,34 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         if (clock != null) {
             color = clock.currentTextColor
             val clockSize = clock.textSize
-            if (clockSize > 0f) {
-                ticker.setTextSize(
-                    TypedValue.COMPLEX_UNIT_PX,
-                    Math.max(dp(9f).toFloat(), Math.min(dp(12f).toFloat(), clockSize)),
-                )
+            ticker.paint.textSize = if (clockSize > 0f) {
+                Math.max(dp(9f).toFloat(), Math.min(dp(12f).toFloat(), clockSize))
             } else {
-                ticker.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+                TypedValue.applyDimension(
+                    TypedValue.COMPLEX_UNIT_SP,
+                    11f,
+                    resources.displayMetrics,
+                )
             }
-            ticker.typeface = clock.typeface
+            ticker.paint.typeface = clock.typeface
         } else {
-            ticker.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            ticker.paint.textSize = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_SP,
+                11f,
+                resources.displayMetrics,
+            )
         }
         if (Color.alpha(color) == 0) color = statusForeground()
-        ticker.setTextColor(color)
+        ticker.paint.color = color
+        // 字号/字体变了，文本宽度要重新量。
+        ticker.refreshWidth()
     }
 
-    fun show(text: String, rounds: Int = 1) {
+    fun show(
+        text: String,
+        rounds: Int = 1,
+        speedPxPerSecond: Int = ModulePreferences.DEFAULT_STATUS_SCROLL_SPEED,
+    ) {
         val currentHost = host
         if (currentHost == null) {
             pendingText = text
@@ -566,38 +644,28 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         alpha = 1f
         shownAt = SystemClock.uptimeMillis()
         attached = true
-        displayRounds = Math.max(1, Math.min(5, rounds))
+        displayRounds = ModulePreferences.coerceStatusScrollRounds(rounds)
+        scrollPxPerSecond =
+            ModulePreferences.coerceStatusScrollSpeed(speedPxPerSecond).toFloat()
         completedRounds = 0
         hideStatusBarPeers(currentHost)
         copyClockStyle()
-        val next = text
-        fullText = next
-        prepareTextPages(next)
-        ticker.animate().cancel()
-        handler.removeCallbacks(pageAdvanceAction)
-        val distance = scrollDistance()
-        if (!hasText) {
-            ticker.setText(if (textPages.isEmpty()) "" else textPages[0])
-            pageIndex = 0
-            ticker.translationY = distance.toFloat()
-            ticker.alpha = 0f
-            ticker.animate().translationY(0f).alpha(1f).setDuration(190L)
-                .setInterpolator(SCROLL_ENTER_INTERPOLATOR).start()
-        } else {
-            ticker.animate().translationY(-distance.toFloat()).alpha(0f).setDuration(150L)
-                .setInterpolator(SCROLL_EXIT_INTERPOLATOR)
-                .withEndAction {
-                    ticker.setText(if (textPages.isEmpty()) "" else textPages[0])
-                    pageIndex = 0
-                    ticker.translationY = distance.toFloat()
-                    ticker.animate().translationY(0f).alpha(1f).setDuration(190L)
-                        .setInterpolator(SCROLL_ENTER_INTERPOLATOR).start()
-                }.start()
-        }
+        fullText = text
+        stopScroll()
+        ticker.text = text
         hasText = true
-        schedulePageAdvance()
+        updateScrollMetrics()
+        // 一进场就铺满可见：位移从 0 开始，不做"从右缘滑入"，
+        // 否则开头那段会留一大片空白。
+        ticker.offsetX = 0f
+        scrollOffset = 0f
+        ticker.alpha = 0f
+        ticker.animate().alpha(1f).setDuration(170L).start()
+        startOrContinueScroll()
         handler.removeCallbacks(removeAction)
-        if (textPages.size <= 1) {
+        if (!scrollActive) {
+            // 不滚的短通知也要给出完整可见时间：原来按"页数 ≤ 1"落到这条，
+            // 现在按"没有滚动"判断，语义不变。
             handler.postDelayed(removeAction, 2_400L)
         }
         scheduleOverlayKeepAlive()
@@ -628,20 +696,20 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
             return
         }
         handler.removeCallbacks(removeAction)
-        handler.removeCallbacks(pageAdvanceAction)
         handler.removeCallbacks(overlayKeepAliveAction)
         attached = false
         hasText = false
         completedRounds = 0
         restorePeers()
-        ticker.animate().cancel()
+        stopScroll()
+        ticker.offsetX = 0f
         animate().cancel()
         alpha = 0f
         ticker.alpha = 0f
-        ticker.setText("")
-        textPages.clear()
+        ticker.text = ""
         fullText = ""
-        pageIndex = 0
+        measuredTextWidth = 0f
+        scrollOffset = 0f
         shownAt = 0L
         // 保持透明宿主挂载：否则 ColorOS 会重建左侧状态栏分组，
         // 让时钟与图标的显隐和这里抢时序。
@@ -658,60 +726,98 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         }
     }
 
-    private fun prepareTextPages(text: String?) {
-        textPages.clear()
-        if (text == null || text.isEmpty()) return
-        val width = Math.max(dp(90f), contentWidth)
-        var remaining: String = text
-        while (remaining.isNotEmpty()) {
-            var count: Int
-            try {
-                count = ticker.paint.breakText(remaining, true, width.toFloat(), null)
-            } catch (ignored: Throwable) {
-                count = Math.min(24, remaining.length)
-            }
-            if (count <= 0) count = Math.min(24, remaining.length)
-            var split = Math.min(count, remaining.length)
-            val newline = remaining.lastIndexOf('\n', split - 1)
-            if (newline > 0) split = newline
-            textPages.add(remaining.substring(0, split).trim())
-            remaining = remaining.substring(split).trim()
+    /**
+     * 按当前可视宽度重算整条文本的测量宽度，并把已有位移夹回合法区间。
+     *
+     * 每次重排都调用：可视宽度变了（打字、旋屏、挖孔避让、SystemUI 重建）时，
+     * 滚动要接着走而不是被打回起点。
+     */
+    private fun updateScrollMetrics() {
+        if (!hasText || fullText.isEmpty()) return
+        // 文本宽度以 paint 的测量值为准，并带上 ticker 自身的左右留白：
+        // 这个值同时是"滚动距离"和"ticker 的布局宽度"，两者必须一致，
+        // 否则要么末尾断字，要么滚过头留白。
+        // 文本宽度直接由 paint 量，带上 ticker 自己的左右留白。
+        // 不经过 TextView 的测量，就不会被上一条通知的宽度带偏。
+        measuredTextWidth = if (contentWidth <= 0) {
+            0f
+        } else {
+            ticker.textWidth + ticker.paddingLeft + ticker.paddingRight
+        }
+        if (scrollActive) {
+            scrollOffset = HorizontalTickerMotion.clampOffset(scrollOffset, measuredTextWidth)
+            ticker.offsetX = scrollOffset
         }
     }
 
-    private fun schedulePageAdvance() {
-        if (textPages.size > 1) handler.postDelayed(pageAdvanceAction, 1800L)
+    /** 文本超出可视宽度才滚；短文本保持左对齐静态显示。 */
+    private fun startOrContinueScroll() {
+        if (!hasText || fullText.isEmpty()) {
+            stopScroll()
+            return
+        }
+        if (!HorizontalTickerMotion.shouldScroll(measuredTextWidth, contentWidth.toFloat())) {
+            stopScroll()
+            ticker.offsetX = 0f
+            return
+        }
+        if (!scrollActive) {
+            scrollActive = true
+            ModuleLog.debug("BubbleNotify") {
+                "STATUS_TICKER_SCROLL_START textW=" + measuredTextWidth.toInt() +
+                    " contentW=" + contentWidth + " px/s=" + scrollPxPerSecond +
+                    " rounds=" + displayRounds
+            }
+            // 进场即滚：停留会看起来像掉了一帧。
+            scrollOffset = HorizontalTickerMotion.clampOffset(ticker.offsetX, measuredTextWidth)
+            lastScrollStepAt = SystemClock.uptimeMillis()
+        }
+        scrollOffset = HorizontalTickerMotion.clampOffset(scrollOffset, measuredTextWidth)
+        ticker.offsetX = scrollOffset
+        scheduleScrollStep(0L)
     }
 
-    private fun advancePage() {
-        if (!hasText || textPages.size <= 1) return
-        val distance = scrollDistance()
-        if (pageIndex >= textPages.size - 1) {
+    private fun stopScroll() {
+        scrollActive = false
+        Choreographer.getInstance().removeFrameCallback(scrollFrame)
+    }
+
+    /** 逐帧回调对齐 vsync：比 postDelayed(16) 少一次唤醒抖动。 */
+    private fun scheduleScrollStep(delayMs: Long) {
+        val choreographer = Choreographer.getInstance()
+        choreographer.removeFrameCallback(scrollFrame)
+        if (!scrollActive) return
+        if (delayMs > 0L) {
+            handler.postDelayed({ if (scrollActive) choreographer.postFrameCallback(scrollFrame) }, delayMs)
+        } else {
+            choreographer.postFrameCallback(scrollFrame)
+        }
+    }
+
+    private fun stepScroll() {
+        if (!hasText || !scrollActive) return
+        val now = SystemClock.uptimeMillis()
+        // 用真实时间差算位移：任一步被 SystemUI 主线程拖慢时，
+        // 下一拍用累计时长补回来，速度仍是恒定的像素/秒。
+        val elapsed = Math.max(1L, now - lastScrollStepAt)
+        lastScrollStepAt = now
+        scrollOffset = HorizontalTickerMotion.advanceOffset(
+            offset = scrollOffset,
+            elapsedMs = elapsed,
+            pxPerSecond = scrollPxPerSecond,
+            textWidth = measuredTextWidth,
+        )
+        if (scrollOffset <= -measuredTextWidth) {
+            // 一整遍滚完：这里才是"完成一轮"。
             completedRounds++
-            if (completedRounds >= displayRounds) {
+            if (HorizontalTickerMotion.isFinished(completedRounds, displayRounds)) {
                 removeImmediately()
                 return
             }
-            pageIndex = 0
-        } else {
-            pageIndex++
+            scrollOffset = 0f
         }
-        ticker.animate().cancel()
-        ticker.animate().translationY(-distance.toFloat()).alpha(0f).setDuration(150L)
-            .setInterpolator(SCROLL_EXIT_INTERPOLATOR)
-            .withEndAction {
-                ticker.setText(textPages[pageIndex])
-                ticker.translationY = distance.toFloat()
-                ticker.animate().translationY(0f).alpha(1f).setDuration(190L)
-                    .setInterpolator(SCROLL_ENTER_INTERPOLATOR).start()
-            }.start()
-        handler.postDelayed(pageAdvanceAction, 2200L)
-    }
-
-    /** 每页只滚半行状态栏高度，让每页在视觉上仍有依托。 */
-    private fun scrollDistance(): Int {
-        val row = if (height > 0) height else statusBarHeight()
-        return Math.max(dp(8f), Math.round(row * 0.5f))
+        ticker.offsetX = scrollOffset
+        scheduleScrollStep(0L)
     }
 
     private fun detachOverlay() {
@@ -797,10 +903,5 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
         return if (id == 0) dp(24f) else resources.getDimensionPixelSize(id)
     }
 
-    private companion object {
-        private val SCROLL_EXIT_INTERPOLATOR =
-            PathInterpolator(0.40f, 0.00f, 1.00f, 1.00f)
-        private val SCROLL_ENTER_INTERPOLATOR =
-            PathInterpolator(0.05f, 0.70f, 0.10f, 1.00f)
-    }
+
 }

@@ -25,6 +25,8 @@ internal data class BubbleSettings(
     val previewTimeoutSeconds: Int,
     val previewDynamicTimeout: Boolean,
     val autoDismiss: Boolean,
+    /** 到点直接消失（既不贴边收起也不原地变暗）。 */
+    val dismissOnTimeout: Boolean = ModulePreferences.DEFAULT_BUBBLE_DISMISS_ON_TIMEOUT,
     val continuousMotion: Boolean,
     /** 内容卡宽度：auto 时按内容自适应。 */
     val previewAutoWidth: Boolean = true,
@@ -35,6 +37,8 @@ internal data class BubbleSettings(
     val statusScrollEnabled: Boolean = ModulePreferences.DEFAULT_STATUS_SCROLL_ENABLED,
     val statusScrollActive: Boolean = false,
     val statusScrollRounds: Int = ModulePreferences.DEFAULT_STATUS_SCROLL_ROUNDS,
+    /** 滚动速度（像素/秒），恒定，不随文本长度变化。 */
+    val statusScrollSpeed: Int = ModulePreferences.DEFAULT_STATUS_SCROLL_SPEED,
     /** 免打扰：三种场景各自独立，见 [BubbleEnvironmentGate]。 */
     val skipForeground: Boolean = ModulePreferences.DEFAULT_BUBBLE_SKIP_FOREGROUND,
     val skipGame: Boolean = ModulePreferences.DEFAULT_BUBBLE_SKIP_GAME,
@@ -89,10 +93,12 @@ internal data class BubbleSettings(
                 previewTimeoutSeconds = ModulePreferences.DEFAULT_BUBBLE_PREVIEW_TIMEOUT_SECONDS,
                 previewDynamicTimeout = ModulePreferences.DEFAULT_BUBBLE_PREVIEW_DYNAMIC_TIMEOUT,
                 autoDismiss = ModulePreferences.DEFAULT_BUBBLE_AUTO_DISMISS,
+                dismissOnTimeout = ModulePreferences.DEFAULT_BUBBLE_DISMISS_ON_TIMEOUT,
                 continuousMotion = ModulePreferences.DEFAULT_BUBBLE_MOTION_CONTINUOUS,
                 statusScrollEnabled = ModulePreferences.DEFAULT_STATUS_SCROLL_ENABLED,
                 statusScrollActive = false,
                 statusScrollRounds = ModulePreferences.DEFAULT_STATUS_SCROLL_ROUNDS,
+                statusScrollSpeed = ModulePreferences.DEFAULT_STATUS_SCROLL_SPEED,
                 suggestionsActive = false,
             )
 
@@ -117,11 +123,14 @@ internal data class BubbleSettings(
                     ),
                 previewDynamicTimeout = snapshot.bubblePreviewDynamicTimeout,
                 autoDismiss = snapshot.bubbleAutoDismiss,
+                dismissOnTimeout = snapshot.bubbleDismissOnTimeout,
                 continuousMotion = snapshot.bubbleMotionContinuous,
                 statusScrollEnabled = snapshot.statusScrollEnabled,
                 statusScrollActive = snapshot.statusScrollActive,
                 statusScrollRounds =
                     ModulePreferences.coerceStatusScrollRounds(snapshot.statusScrollRounds),
+                statusScrollSpeed =
+                    ModulePreferences.coerceStatusScrollSpeed(snapshot.statusScrollSpeed),
                 skipForeground = snapshot.bubbleSkipForeground,
                 skipGame = snapshot.bubbleSkipGame,
                 skipLocked = snapshot.bubbleSkipLocked,

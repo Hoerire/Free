@@ -276,11 +276,15 @@ internal object ModulePreferences {
     const val KEY_BUBBLE_PREVIEW_TIMEOUT_SECONDS = "bubble_preview_timeout_seconds_v1"
     const val KEY_BUBBLE_PREVIEW_DYNAMIC_TIMEOUT = "bubble_preview_dynamic_timeout_v1"
     const val KEY_BUBBLE_AUTO_DISMISS = "bubble_auto_dismiss_v1"
+    /** 到点行为：true = 直接消失（不贴边、不变暗）。 */
+    const val KEY_BUBBLE_DISMISS_ON_TIMEOUT = "bubble_dismiss_on_timeout_v1"
     const val KEY_BUBBLE_MOTION_CONTINUOUS = "bubble_motion_continuous_v1"
 
     /** 状态栏滚动开关：气泡总闸之下的子开关，可以只滚不出气泡。 */
     const val KEY_STATUS_SCROLL_ENABLED = "status_scroll_enabled_v1"
     const val KEY_STATUS_SCROLL_ROUNDS = "status_scroll_rounds_v1"
+    /** 滚动速度（像素/秒）：恒定速度，不随文本长度变化。 */
+    const val KEY_STATUS_SCROLL_SPEED = "status_scroll_speed_px_v1"
     /**
      * 免打扰：三种场景下不出气泡与建议。
      *
@@ -354,6 +358,7 @@ internal object ModulePreferences {
     const val MAX_BUBBLE_PREVIEW_TIMEOUT_SECONDS = 15
     const val DEFAULT_BUBBLE_PREVIEW_DYNAMIC_TIMEOUT = true
     const val DEFAULT_BUBBLE_AUTO_DISMISS = true
+    const val DEFAULT_BUBBLE_DISMISS_ON_TIMEOUT = false
     const val DEFAULT_BUBBLE_MOTION_CONTINUOUS = true
     const val DEFAULT_STATUS_SCROLL_ENABLED = false
     const val DEFAULT_STATUS_SCROLL_ROUNDS = 1
@@ -369,6 +374,13 @@ internal object ModulePreferences {
     const val DEFAULT_BUBBLE_SKIP_LOCKED = true
     const val MIN_STATUS_SCROLL_ROUNDS = 1
     const val MAX_STATUS_SCROLL_ROUNDS = 5
+    /**
+     * 滚动速度区间（px/s）。默认 150px/s 大约是每秒 8 个汉字，
+     * 长通知也不会滚太久；下限 40 适合慢慢读，上限 300 给习惯快读的人。
+     */
+    const val DEFAULT_STATUS_SCROLL_SPEED = 150
+    const val MIN_STATUS_SCROLL_SPEED = 40
+    const val MAX_STATUS_SCROLL_SPEED = 300
     private const val MAX_BUBBLE_WHITELIST = 200
 
     fun coerceBubbleSizePercent(value: Int): Int =
@@ -391,6 +403,9 @@ internal object ModulePreferences {
 
     fun coerceStatusScrollRounds(value: Int): Int =
         value.coerceIn(MIN_STATUS_SCROLL_ROUNDS, MAX_STATUS_SCROLL_ROUNDS)
+
+    fun coerceStatusScrollSpeed(value: Int): Int =
+        value.coerceIn(MIN_STATUS_SCROLL_SPEED, MAX_STATUS_SCROLL_SPEED)
 
     /**
      * 气泡白名单键：包名，或 `包名#userId`。

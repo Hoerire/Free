@@ -17,12 +17,17 @@ internal class BubbleWindowHost(private val logger: (code: String, throwable: Th
     val stack: BubbleStackOverlay? get() = stackView
     val preview: NotificationPreviewView? get() = previewView
 
-    fun showBubble(view: BubbleSurfaceView, timeoutSeconds: Int, dimOnTimeout: Boolean): Boolean {
+    fun showBubble(
+        view: BubbleSurfaceView,
+        timeoutSeconds: Int,
+        dimOnTimeout: Boolean,
+        dismissOnTimeout: Boolean,
+    ): Boolean {
         if (bubbleView != null && bubbleView !== view) {
             runCatching { bubbleView?.dismiss() }
         }
         val shown =
-            runCatching { view.show(timeoutSeconds, dimOnTimeout) }.getOrElse {
+            runCatching { view.show(timeoutSeconds, dimOnTimeout, dismissOnTimeout) }.getOrElse {
                 logger("BUBBLE_WINDOW_ADD_FAILED", it)
                 false
             }

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.SwipeRight
 import androidx.compose.material.icons.rounded.Tune
@@ -296,6 +297,7 @@ private fun BubbleOverview(
                             stringResource(
                                 R.string.bubble_status_scroll_summary_on,
                                 settings.statusScrollRounds,
+                                settings.statusScrollSpeed,
                             )
                         } else {
                             stringResource(R.string.bubble_status_scroll_summary_off)
@@ -329,10 +331,10 @@ private fun timingSummary(settings: ModuleSettingsSnapshot): String =
             R.string.bubble_timing_summary_seconds,
             settings.bubbleTimeoutSeconds,
             stringResource(
-                if (settings.bubbleDimOnTimeout) {
-                    R.string.bubble_timeout_dim_kept
-                } else {
-                    R.string.bubble_timeout_dock
+                when {
+                    settings.bubbleDismissOnTimeout -> R.string.bubble_timeout_dismiss
+                    settings.bubbleDimOnTimeout -> R.string.bubble_timeout_dim_kept
+                    else -> R.string.bubble_timeout_dock
                 },
             ),
         )
@@ -655,12 +657,35 @@ private fun BubbleTimingPage(
                 SwitchPreference(
                     checked = settings.bubbleDimOnTimeout,
                     onCheckedChange = { value ->
-                        onSettingsChange { it.copy(bubbleDimOnTimeout = value) }
+                        onSettingsChange {
+                            it.copy(
+                                bubbleDimOnTimeout = value,
+                                // 两种到点行为互斥：开了变暗就不再直接消失。
+                                bubbleDismissOnTimeout =
+                                    if (value) false else it.bubbleDismissOnTimeout,
+                            )
+                        }
                     },
                     title = stringResource(R.string.bubble_dim_title),
                     summary = stringResource(R.string.bubble_dim_summary),
                     enabled = bubbleEditable && settings.bubbleAutoDismiss,
                     startAction = { PreferenceIcon(Icons.Rounded.Layers, bubbleEditable) },
+                )
+                SwitchPreference(
+                    checked = settings.bubbleDismissOnTimeout,
+                    onCheckedChange = { value ->
+                        onSettingsChange {
+                            it.copy(
+                                bubbleDismissOnTimeout = value,
+                                bubbleDimOnTimeout =
+                                    if (value) false else it.bubbleDimOnTimeout,
+                            )
+                        }
+                    },
+                    title = stringResource(R.string.bubble_dismiss_on_timeout_title),
+                    summary = stringResource(R.string.bubble_dismiss_on_timeout_summary),
+                    enabled = bubbleEditable && settings.bubbleAutoDismiss,
+                    startAction = { PreferenceIcon(Icons.Rounded.Block, bubbleEditable) },
                 )
             }
         }
@@ -795,6 +820,30 @@ private fun BubbleStatusScrollPage(
                             it.copy(
                                 statusScrollRounds =
                                     ModulePreferences.coerceStatusScrollRounds(value),
+                            )
+                        }
+                    },
+                    showDpUnit = false,
+                )
+                RemoteDpSliderPreference(
+                    icon = Icons.Rounded.Speed,
+                    confirmedValue = settings.statusScrollSpeed,
+                    isUpdating = state.isUpdating,
+                    enabled = statusEditable && settings.statusScrollEnabled,
+                    title = stringResource(R.string.bubble_status_scroll_speed_title),
+                    summary = stringResource(
+                        R.string.bubble_status_scroll_speed_summary,
+                        settings.statusScrollSpeed,
+                    ),
+                    minDp = ModulePreferences.MIN_STATUS_SCROLL_SPEED,
+                    maxDp = ModulePreferences.MAX_STATUS_SCROLL_SPEED,
+                    coerceDp = ModulePreferences::coerceStatusScrollSpeed,
+                    onPreviewChange = {},
+                    onCommit = { value ->
+                        onSettingsChange {
+                            it.copy(
+                                statusScrollSpeed =
+                                    ModulePreferences.coerceStatusScrollSpeed(value),
                             )
                         }
                     },

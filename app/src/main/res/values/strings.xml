@@ -247,11 +247,13 @@
     <string name="bubble_motion_title">循环播放动效</string>
     <string name="bubble_motion_summary">持续的气泡装饰；关闭后只保留 180ms 淡入</string>
     <string name="bubble_auto_dismiss_title">到点自动收起</string>
-    <string name="bubble_auto_dismiss_summary">关闭后气泡一直停留；开启后到点按「到点变暗留置」处理</string>
+    <string name="bubble_auto_dismiss_summary">关闭后气泡一直停留；开启后到点按下面的方式处理</string>
     <string name="bubble_timeout_title">停留时长</string>
     <string name="bubble_timeout_summary">3–60 秒；贴边气泡不计时</string>
     <string name="bubble_dim_title">到点变暗留置</string>
     <string name="bubble_dim_summary">开启：到点只变暗、留在原位；关闭：到点贴边收起（半隐藏）</string>
+    <string name="bubble_dismiss_on_timeout_title">到点自动消失</string>
+    <string name="bubble_dismiss_on_timeout_summary">开启后到点直接把气泡收掉，不贴边、不变暗（与「到点变暗留置」二选一）</string>
     <string name="bubble_preview_enabled_title">自动展开内容卡</string>
     <string name="bubble_preview_enabled_summary">气泡出现时展开内容卡，停留几秒后自动收回</string>
     <string name="bubble_suppress_banner_title">接管通知横幅</string>
@@ -268,7 +270,9 @@
     <string name="bubble_status_scroll_enabled_title">滚动显示通知</string>
     <string name="bubble_status_scroll_enabled_summary">通知内容在状态栏时钟位置滚动显示</string>
     <string name="bubble_status_scroll_rounds_title">滚动轮数</string>
-    <string name="bubble_status_scroll_rounds_summary">1–5 轮；文字过长时自动分页</string>
+    <string name="bubble_status_scroll_rounds_summary">1–5 轮；一轮就是整条文字从右往左滚完一遍</string>
+    <string name="bubble_status_scroll_speed_title">滚动速度</string>
+    <string name="bubble_status_scroll_speed_summary">%1$d px/秒；数值越大滚得越快，长短通知速度一致</string>
 
     <string name="bubble_group_apps">应用范围</string>
     <string name="bubble_group_appearance">气泡外观</string>
@@ -282,13 +286,14 @@
     <string name="bubble_timing_summary_off">一直停留（不自动收起）</string>
     <string name="bubble_timeout_dim_kept">变暗留置</string>
     <string name="bubble_timeout_dock">贴边收起</string>
+    <string name="bubble_timeout_dismiss">自动消失</string>
     <string name="bubble_preview_summary_on">开 · %1$s · %2$s</string>
     <string name="bubble_preview_summary_off">关（不展开内容卡）</string>
     <string name="bubble_preview_edge_on">仅贴边</string>
     <string name="bubble_preview_edge_off">任意位置</string>
     <string name="bubble_preview_dynamic_on">动态时长</string>
     <string name="bubble_preview_dynamic_off">固定 %1$d 秒</string>
-    <string name="bubble_status_scroll_summary_on">开 · %1$d 轮</string>
+    <string name="bubble_status_scroll_summary_on">开 · %1$d 轮 · %2$d px/秒</string>
     <string name="bubble_status_scroll_summary_off">关</string>
     <string name="bubble_suggestions_summary_on">开 · 场景建议气泡</string>
     <string name="bubble_suggestions_summary_off">关</string>

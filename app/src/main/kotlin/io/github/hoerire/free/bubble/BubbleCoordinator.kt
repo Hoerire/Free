@@ -310,7 +310,7 @@ internal class BubbleCoordinator(
             }
         }
         val timeout = timeoutFor(item)
-        if (!windows.showBubble(bubble, timeout.seconds, timeout.dim)) {
+        if (!windows.showBubble(bubble, timeout.seconds, timeout.dim, timeout.dismiss)) {
             log("BUBBLE_SHOW_REJECTED_" + item.packageName, bubble.getShowError())
             if (screenSuspended || !isScreenInteractive()) return
             if (item.notificationKey != null) {
@@ -347,7 +347,7 @@ internal class BubbleCoordinator(
         bubble.popOut()
         shownItem = item
         val timeout = timeoutFor(item)
-        bubble.updateTimeout(timeout.seconds, timeout.dim)
+        bubble.updateTimeout(timeout.seconds, timeout.dim, timeout.dismiss)
         bubble.setIconAnimated(item.payload.icon)
         bubble.setAppBadge(item.payload.appIcon)
         updateChildren()
@@ -361,7 +361,7 @@ internal class BubbleCoordinator(
         bubble.setIconAnimated(next.payload.icon)
         bubble.setAppBadge(next.payload.appIcon)
         val timeout = timeoutFor(next)
-        bubble.updateTimeout(timeout.seconds, timeout.dim)
+        bubble.updateTimeout(timeout.seconds, timeout.dim, timeout.dismiss)
         updateChildren()
         showPreview()
     }
@@ -932,7 +932,7 @@ internal class BubbleCoordinator(
         val bubble = windows.bubble
         if (bubble != null && bubble.isAttached()) {
             val timeout = timeoutFor(queue.head)
-            bubble.updateTimeout(timeout.seconds, timeout.dim)
+            bubble.updateTimeout(timeout.seconds, timeout.dim, timeout.dismiss)
             updateChildren()
             if (!settings.previewEdgeOnly || bubble.isDocked()) {
                 handler.postDelayed({ showPreview() }, SCREEN_ON_PREVIEW_DELAY_MS)
@@ -978,7 +978,7 @@ internal class BubbleCoordinator(
         }
         if (bubble != null && head != null) {
             val timeout = timeoutFor(queue.head)
-            bubble.updateTimeout(timeout.seconds, timeout.dim)
+            bubble.updateTimeout(timeout.seconds, timeout.dim, timeout.dismiss)
         }
     }
 
@@ -989,7 +989,11 @@ internal class BubbleCoordinator(
         }
         if (deviceLocked() || !screenInteractive) return BubbleTimeout(0, false)
         if (!settings.autoDismiss) return BubbleTimeout(0, false)
-        return BubbleTimeout(settings.timeoutSeconds, settings.dimOnTimeout)
+        return BubbleTimeout(
+            settings.timeoutSeconds,
+            settings.dimOnTimeout,
+            settings.dismissOnTimeout,
+        )
     }
 
     private fun rememberPosition(bubble: BubbleSurfaceView) {
@@ -1061,7 +1065,11 @@ internal class BubbleCoordinator(
         )
     }
 
-    private data class BubbleTimeout(val seconds: Int, val dim: Boolean)
+    private data class BubbleTimeout(
+        val seconds: Int,
+        val dim: Boolean,
+        val dismiss: Boolean = false,
+    )
 
     private companion object {
         const val MAX_STACK_ITEMS = 6

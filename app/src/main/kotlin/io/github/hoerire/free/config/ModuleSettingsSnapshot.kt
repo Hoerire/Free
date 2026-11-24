@@ -128,13 +128,17 @@ internal data class ModuleSettingsSnapshot(
         ModulePreferences.DEFAULT_BUBBLE_PREVIEW_TIMEOUT_SECONDS,
     val bubblePreviewDynamicTimeout: Boolean =
         ModulePreferences.DEFAULT_BUBBLE_PREVIEW_DYNAMIC_TIMEOUT,
-    /** 到点后气泡自动消失；关闭则只变暗，等用户处理。 */
+    /** 到点后气泡自动消失；关闭则一直停留。 */
     val bubbleAutoDismiss: Boolean = ModulePreferences.DEFAULT_BUBBLE_AUTO_DISMISS,
+    /** 到点直接消失（既不贴边收起也不原地变暗）。 */
+    val bubbleDismissOnTimeout: Boolean = ModulePreferences.DEFAULT_BUBBLE_DISMISS_ON_TIMEOUT,
     /** 装饰动效是否常驻（贴边呼吸、色散边）；关闭后只在交互时重绘。 */
     val bubbleMotionContinuous: Boolean = ModulePreferences.DEFAULT_BUBBLE_MOTION_CONTINUOUS,
     /** 状态栏滚动：最新通知在时钟位置滚动显示。子开关，受气泡总闸约束。 */
     val statusScrollEnabled: Boolean = ModulePreferences.DEFAULT_STATUS_SCROLL_ENABLED,
     val statusScrollRounds: Int = ModulePreferences.DEFAULT_STATUS_SCROLL_ROUNDS,
+    /** 滚动速度（像素/秒）。 */
+    val statusScrollSpeed: Int = ModulePreferences.DEFAULT_STATUS_SCROLL_SPEED,
     /** 免打扰：当前应用 / 游戏 / 锁屏与息屏三种场景各自独立。 */
     val bubbleSkipForeground: Boolean = ModulePreferences.DEFAULT_BUBBLE_SKIP_FOREGROUND,
     val bubbleSkipGame: Boolean = ModulePreferences.DEFAULT_BUBBLE_SKIP_GAME,
@@ -373,6 +377,10 @@ internal data class ModuleSettingsSnapshot(
                 ModulePreferences.coerceStatusScrollRounds(statusScrollRounds),
             )
             .putInt(
+                ModulePreferences.KEY_STATUS_SCROLL_SPEED,
+                ModulePreferences.coerceStatusScrollSpeed(statusScrollSpeed),
+            )
+            .putInt(
                 ModulePreferences.KEY_BUBBLE_PREVIEW_TIMEOUT_SECONDS,
                 ModulePreferences.coerceBubblePreviewTimeoutSeconds(bubblePreviewTimeoutSeconds),
             )
@@ -381,6 +389,10 @@ internal data class ModuleSettingsSnapshot(
                 bubblePreviewDynamicTimeout,
             )
             .putBoolean(ModulePreferences.KEY_BUBBLE_AUTO_DISMISS, bubbleAutoDismiss)
+            .putBoolean(
+                ModulePreferences.KEY_BUBBLE_DISMISS_ON_TIMEOUT,
+                bubbleDismissOnTimeout,
+            )
             .putString(
                 ModulePreferences.KEY_BLACKLIST_PACKAGES,
                 blacklistPackages.joinToString("\n"),
@@ -781,6 +793,12 @@ internal data class ModuleSettingsSnapshot(
                         ModulePreferences.DEFAULT_STATUS_SCROLL_ROUNDS,
                     ),
                 ),
+                statusScrollSpeed = ModulePreferences.coerceStatusScrollSpeed(
+                    preferences.getInt(
+                        ModulePreferences.KEY_STATUS_SCROLL_SPEED,
+                        ModulePreferences.DEFAULT_STATUS_SCROLL_SPEED,
+                    ),
+                ),
                 suggestionsEnabled = preferences.getBoolean(
                     ModulePreferences.KEY_SUGGESTIONS_ENABLED,
                     ModulePreferences.DEFAULT_SUGGESTIONS_ENABLED,
@@ -834,6 +852,10 @@ internal data class ModuleSettingsSnapshot(
                 bubbleAutoDismiss = preferences.getBoolean(
                     ModulePreferences.KEY_BUBBLE_AUTO_DISMISS,
                     ModulePreferences.DEFAULT_BUBBLE_AUTO_DISMISS,
+                ),
+                bubbleDismissOnTimeout = preferences.getBoolean(
+                    ModulePreferences.KEY_BUBBLE_DISMISS_ON_TIMEOUT,
+                    ModulePreferences.DEFAULT_BUBBLE_DISMISS_ON_TIMEOUT,
                 ),
             )
         }

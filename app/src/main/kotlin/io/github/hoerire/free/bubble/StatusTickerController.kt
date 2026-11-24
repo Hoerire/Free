@@ -58,17 +58,17 @@ internal class StatusTickerController(
         // 同一条通知的更新不打断；正在滚另一条时排队，让当前这一轮先走完。
         if (overlay?.isShowing() == true) {
             if (sbn.key != null && sbn.key == tickingKey) return
-            pending = PendingTicker(sbn.key, text, config.statusScrollRounds)
+            pending = PendingTicker(sbn.key, text, config.statusScrollRounds, config.statusScrollSpeed)
             runCatching { overlay?.finishCurrentRoundSoon() }
             return
         }
         val target = root
         if (target == null) {
-            pending = PendingTicker(sbn.key, text, config.statusScrollRounds)
+            pending = PendingTicker(sbn.key, text, config.statusScrollRounds, config.statusScrollSpeed)
             ensureScanner()
             return
         }
-        show(target, sbn.key, text, config.statusScrollRounds)
+        show(target, sbn.key, text, config.statusScrollRounds, config.statusScrollSpeed)
     }
 
     /** 设置关闭/模块关闭时立刻收回，正显示的那条也一起停。 */
@@ -110,6 +110,7 @@ internal class StatusTickerController(
         key: String?,
         text: String,
         rounds: Int,
+        speed: Int,
     ) {
         val view = overlay ?: StatusScrollOverlay(context).also { created ->
             created.setFinishedAction { onFinished() }
@@ -119,7 +120,7 @@ internal class StatusTickerController(
             .onFailure { logger("STATUS_TICKER_ATTACH_FAILED", it) }
         // 不再显示图标：QQ 这类应用给的是满幅图片，染色后就是一块实心方块；
         // 文字本身已经以应用名开头（见 buildText），图标去掉反而更稳定。
-        runCatching { view.show(text, rounds) }
+        runCatching { view.show(text, rounds, speed) }
             .onFailure { logger("STATUS_TICKER_SHOW_FAILED", it) }
         tickingKey = key
     }
@@ -129,7 +130,7 @@ internal class StatusTickerController(
         val next = pending ?: return
         pending = null
         val host = root ?: return
-        show(host, next.key, next.text, next.rounds)
+        show(host, next.key, next.text, next.rounds, next.speed)
     }
 
     private fun buildText(payload: BubblePayload): String =
@@ -154,7 +155,7 @@ internal class StatusTickerController(
         val pendingNow = pending
         if (pendingNow != null) {
             pending = null
-            show(host, pendingNow.key, pendingNow.text, pendingNow.rounds)
+            show(host, pendingNow.key, pendingNow.text, pendingNow.rounds, pendingNow.speed)
         } else {
             runCatching { overlay?.attachTo(host) }
         }
@@ -338,6 +339,7 @@ internal class StatusTickerController(
         val key: String?,
         val text: String,
         val rounds: Int,
+        val speed: Int,
     )
 
     private companion object {

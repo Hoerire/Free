@@ -122,6 +122,7 @@ internal class BubbleSurfaceView(
     private var dockingAllowed = true
     private var timeoutSeconds = 0
     private var dimOnTimeout = false
+    private var dismissOnTimeout = false
     private var timeoutDimmed = false
     private var landingSuppressed = false
     private var landscape = false
@@ -577,7 +578,7 @@ internal class BubbleSurfaceView(
         safeBottom = bounds.height() - bars.bottom - viewSize - dp(12f)
     }
 
-    fun show(timeoutSeconds: Int, dimOnTimeout: Boolean): Boolean {
+    fun show(timeoutSeconds: Int, dimOnTimeout: Boolean, dismissOnTimeout: Boolean): Boolean {
         val wm = windowManager
         if (attached || wm == null) return false
         try {
@@ -591,6 +592,7 @@ internal class BubbleSurfaceView(
 
         this.timeoutSeconds = timeoutSeconds
         this.dimOnTimeout = dimOnTimeout
+        this.dismissOnTimeout = dismissOnTimeout
         timeoutDimmed = false
         alpha = 0f
         scaleX = 1f
@@ -612,9 +614,10 @@ internal class BubbleSurfaceView(
 
     fun getShowError(): Throwable? = shownError
 
-    fun updateTimeout(seconds: Int, dimOnTimeout: Boolean) {
+    fun updateTimeout(seconds: Int, dimOnTimeout: Boolean, dismissOnTimeout: Boolean = false) {
         timeoutSeconds = Math.max(0, seconds)
         this.dimOnTimeout = dimOnTimeout
+        this.dismissOnTimeout = dismissOnTimeout
         timeoutDimmed = false
         mainHandler.removeCallbacks(timeoutAction)
         // 恢复常态透明度（贴边与浮动都适用）：息屏期间入场动画可能没跑完，
@@ -1263,6 +1266,11 @@ internal class BubbleSurfaceView(
         }
         if (timeoutSeconds <= 0) {
             ModuleLog.debug("BubbleNotify") { "忽略过期的到点检查：自动收起已关闭" }
+            return
+        }
+        if (dismissOnTimeout) {
+            // 到点直接消失：不贴边、不变暗。
+            dismiss("timeout")
             return
         }
         if (!dimOnTimeout) {
