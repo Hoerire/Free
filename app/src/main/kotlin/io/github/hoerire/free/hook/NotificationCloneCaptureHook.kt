@@ -18,14 +18,14 @@ import io.github.libxposed.api.XposedModule
  *
  * 要解决的问题：分身通知的 `contentIntent` 由分身实例签发，SystemUI 拿到的只是一个
  * 不透明的 `PendingIntent`；直接 `send()` 会按 `PendingIntentRecord.key.userId` 落到主用户，
- * 拿不到会话参数（详见 `CLONE_HANDOFF.md`）。唯一可靠的路径是读出记录里的原始 Intent，
+ * 拿不到会话参数。唯一可靠的路径是读出记录里的原始 Intent，
  * 在目标用户上下文里重建 PendingIntent 再发送——那需要把 Intent 送到 SystemUI。
  *
  * 捕获点选在**通知入库**（`NotificationRecord` 构造），而不是发送时：
  * 发送时捕获意味着必须先把原始 `contentIntent` 发出去（落到主应用），再靠「压掉那次启动」
  * 纠正，代价是一次错误的启动。入库时捕获则完全不改变任何启动行为，点气泡时直接发正确的那个。
  *
- * 死锁约束（3.2.2 教训，见 `BUBBLE_HANDOFF.md` §2.1）：本钩子处在 NotificationManagerService
+ * 死锁约束（踩过一次死锁）：本钩子处在 NotificationManagerService
  * 的持锁路径上，函数内**只做对象字段读取**，不调用任何跨进程方法；`Parcel.marshall` 与
  * `Settings.Global` 写入全部丢到主线程下一轮执行，那时锁已释放。
  */

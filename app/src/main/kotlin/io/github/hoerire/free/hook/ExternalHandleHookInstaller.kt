@@ -1,10 +1,12 @@
 package io.github.hoerire.free.hook
 
 import android.annotation.SuppressLint
+import android.graphics.Canvas
 import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import io.github.hoerire.free.log.ModuleLog
@@ -16,35 +18,42 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * ## 行为
  *
- * 与全面屏手势指示条（[NavigationHandleImmersiveHook]）完全一致：
+ * - 平时**不绘制**，不看窗口大小、不看形态、不看谁触发的；
+ * - 手指碰到底部**立刻显示**，拖动窗口期间全程显示；
+ * - **抬手立即收回**（不需要等窗口失焦、不需要点别处）；
+ * - 不撤 inset、不改布局参数、不改可见性、不改 alpha —— 小窗位置与内容始终不变。
  *
- * - **平时一律隐藏**，不看窗口大小、不看什么形态、不看谁触发的；
- * - **触摸小窗底部就显示**，抬手后 [HIDE_DELAY_MS] 收回；
- * - 隐藏只改可见性，**不动布局、不动 inset**，小窗位置与内容不变。
+ * ## 为什么不再去改 vendor 的 alpha / 可见性
  *
- * ## 实现
+ * 之前两版都在 vendor 的状态上做文章（`updateThreeButtonVisibility(false)`、
+ * 逐个把 `mControlView` / `mBottomHandleView` / 四个按钮的 alpha 归零），都没成：
  *
- * 全部复用系统自身的显隐入口，不新建 View、不改布局参数：
+ * 1. `updateThreeButtonVisibility` 开头有 `if (mLastVisible == 请求值) return`，
+ *    一旦 `mLastVisible` 已被写成 false，收尾那次调用直接 return，什么都没做。
+ * 2. 真正画出来的是 alpha 那一套，而系统会**不停**地用
+ *    `animateControlView` / `animateToolBarMode` / `animateBottomHandleView`
+ *    把 alpha 拉回 1（日志里 `requestVisible = true` 成串出现）。
+ *    模块逐个字段去改，永远追不上一帧之后的重绘。
  *
- * - `FlexibleCaptionView.updateThreeButtonVisibility(boolean)`：系统的"显示操作区"决策点，
- *   内部同时设置 `mThreeButtonFrame` / `mHandleView` / `mFullView` / `mCloseView` /
- *   `mBottomFrame`。系统每次请求显示都被改写成 `false`，所以平时恒为隐藏。
- * - `FlexibleCaptionView.updateBottomHandleViewVisible(boolean)`：单独的底部手柄入口，
- *   同样按上述规则改写。它只维护 `mHasShowBottomView` 与弹簧状态，不写可见性。
- * - `FlexibleCaptionView.dispatchTouchEvent(MotionEvent)`：触摸信号来源。落在底部条带内
- *   就显示，并重新计时收回。
- * - `FlexibleCaptionView.onLayout(...)`：布局完成后确保处于隐藏态（系统可能在布局链路里
- *   重新把操作区拉起来）。
+ * 现在改成**只管这一帧画不画**，vendor 状态一律不碰：
+ *
+ * | 钩子 | 目标 | 作用 |
+ * |---|---|---|
+ * | `external_handle_draw` | `ViewGroup.dispatchDraw(Canvas)` | 命中 caption 且处于隐藏态时跳过绘制（整棵子树一帧都不画） |
+ * | `external_handle_touch` | `FlexibleCaptionView.dispatchTouchEvent(MotionEvent)` | 触摸/拖动信号：落到小窗底部就显示，抬手立即收回 |
+ *
+ * 这与 [NavigationHandleImmersiveHook] 处理全面屏手势指示条是同一套思路——
+ * 那边也是"空闲时 `onDraw` 不交给原方法"，同样不改 inset、不改可见性、不触发重排。
  *
  * ## 为什么"看不见"却"照样好使"
  *
- * 收起用的是 `setVisibility(4)`（INVISIBLE），三个 View 仍参与布局，只是不绘制。
- * 而命中判定**不看可见性**：`isInHandleButtonRegion()` / `getFlexibleTaskActionFlag()`
- * 只问 `mFlexibleCaptionViewRegionMgr` 的几何区域，那些区域由 `updateTouchRegion()`
- * 在 `onLayout` / `relayout` / 迷你窗切换时按当前宽高重算。
- * 所以点横条关窗、横条上滑转迷你窗、三点区域响应全部照旧。
+ * 只是不画。View 仍在布局里，命中判定问的是
+ * `mFlexibleCaptionViewRegionMgr` 的几何区域（`isInHandleButtonRegion()` /
+ * `getFlexibleTaskActionFlag()`），与绘制、可见性、alpha 都无关。
+ * 所以点横条关窗、横条上滑转迷你窗、三点菜单照旧。
  *
- * **不要把 `setVisibility(4)` 改成 GONE，也不要摘掉触摸区域**——那会把功能一起废掉。
+ * **不要改成 `setVisibility(GONE)`、不要摘触摸区域、不要动 alpha**——
+ * 前两者会废掉点击，后者会与 vendor 的动画互相覆盖（前两版就是这么失败的）。
  */
 @SuppressLint("PrivateApi")
 internal class ExternalHandleHookInstaller(
@@ -54,18 +63,25 @@ internal class ExternalHandleHookInstaller(
     private val installed = AtomicBoolean(false)
     private val handler = Handler(Looper.getMainLooper())
 
-    /** 当前是否处于「显示」状态：触摸底部之后、收回之前为 true。 */
+    /** 当前是否处于「显示」状态：手指按住期间为 true，抬手即 false。 */
     @Volatile private var revealed = false
 
-    /** 最后一次被触摸的 caption；延时收回时用它刷新。弱引用，不拖住已销毁的窗口。 */
+    /** caption 的类型，用于在 `dispatchDraw` 里判断"这一帧画的是不是它"。 */
+    @Volatile private var captionType: Class<*>? = null
+
+    /** 最后一次被触摸的 caption。弱引用，不拖住已被销毁的窗口。 */
     private var lastCaption: WeakReference<View>? = null
 
-    private val hideAction =
+    /**
+     * 兜底收回：正常路径靠 `ACTION_UP` / `ACTION_CANCEL` 立即收回，
+     * 这里只负责"抬手事件丢了"的情况（窗口在拖动中被销毁、事件被上层吞掉等）。
+     */
+    private val safetyHide =
         Runnable {
-            revealed = false
-            val caption = lastCaption?.get()
-            if (caption != null && configuration.snapshot.externalHandleEffective) {
-                hideNow(caption)
+            if (revealed) {
+                revealed = false
+                lastCaption?.get()?.invalidate()
+                ModuleLog.debug("EXTERNAL_HANDLE_AUTO_HIDE") { "timeout" }
             }
         }
 
@@ -76,11 +92,10 @@ internal class ExternalHandleHookInstaller(
             return
         }
         if (!installed.compareAndSet(false, true)) return
+        captionType = captionClass
 
-        hookThreeButton(captionClass)
-        hookBottomHandle(captionClass)
+        hookDrawGate(classLoader)
         hookTouch(captionClass)
-        hookLayout(captionClass)
 
         configuration.observe { snapshot ->
             if (!snapshot.externalHandleEffective) handler.post { resetAll() }
@@ -89,66 +104,50 @@ internal class ExternalHandleHookInstaller(
     }
 
     /**
-     * 操作区（三点 + 横条）的显示决策。
+     * 绘制闸门：隐藏态下 caption 的整棵子树一帧都不画。
      *
-     * 系统一直在按自己的时机请求显示；只要不在触摸显示期内就一律改传 `false`，
-     * 于是横条与三点恒为隐藏，与窗口大小、窗口形态无关。
+     * 挂 `ViewGroup.dispatchDraw(Canvas)` 这一个点就够——它覆盖了
+     * `mThreeButtonFrame` / `mBottomFrame` / `mControlView` / `mBottomHandleView`
+     * 以及工具条模式下那四个按钮的全部绘制，不用逐个跟 vendor 的动画赛跑。
+     *
+     * 代价控制：`gateActive` 是 volatile 布尔，关闭本功能或处于显示态时
+     * 只有一次读 + 一次 `proceed()`，不做类型判断、不做反射。
      */
-    private fun hookThreeButton(captionClass: Class<*>) {
+    private fun hookDrawGate(classLoader: ClassLoader) {
         val target =
-            captionClass.declaredMethods.firstOrNull {
-                it.name == "updateThreeButtonVisibility" &&
-                    it.parameterCount == 1 &&
-                    it.parameterTypes[0] == java.lang.Boolean.TYPE
-            }?.apply { isAccessible = true } ?: run {
-                ModuleLog.warn("EXTERNAL_HANDLE_THREE_BUTTON_MISSING", null)
-                return
-            }
+            runCatching {
+                ViewGroup::class.java.getDeclaredMethod("dispatchDraw", Canvas::class.java)
+                    .apply { isAccessible = true }
+            }.getOrNull()
+                ?: runCatching {
+                    classLoader.loadClass("android.view.ViewGroup")
+                        .getDeclaredMethod("dispatchDraw", Canvas::class.java)
+                        .apply { isAccessible = true }
+                }.getOrNull()
+        if (target == null) {
+            ModuleLog.warn("EXTERNAL_HANDLE_DRAW_TARGET_MISSING", null)
+            return
+        }
         module
             .hook(target)
             .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
-            .setId("free.system.external_handle_three_button")
+            .setId("free.system.external_handle_draw")
             .intercept { chain ->
-                val requested = chain.getArg(0) as? Boolean
-                val caption = chain.thisObject as? View
-                if (requested != true || caption == null ||
-                    !configuration.snapshot.externalHandleEffective || revealed
-                ) {
-                    return@intercept chain.proceed()
+                if (gateActive() && captionType?.isInstance(chain.thisObject) == true) {
+                    return@intercept null
                 }
-                chain.proceed(arrayOf<Any?>(false))
-            }
-    }
-
-    /** 底部手柄自身的显隐：同一套规则。 */
-    private fun hookBottomHandle(captionClass: Class<*>) {
-        val target =
-            captionClass.declaredMethods.firstOrNull {
-                it.name == "updateBottomHandleViewVisible" &&
-                    it.parameterCount == 1 &&
-                    it.parameterTypes[0] == java.lang.Boolean.TYPE
-            }?.apply { isAccessible = true } ?: return
-        module
-            .hook(target)
-            .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
-            .setId("free.system.external_handle_bottom_visible")
-            .intercept { chain ->
-                val requested = chain.getArg(0) as? Boolean
-                val caption = chain.thisObject as? View
-                if (requested != true || caption == null ||
-                    !configuration.snapshot.externalHandleEffective || revealed
-                ) {
-                    return@intercept chain.proceed()
-                }
-                chain.proceed(arrayOf<Any?>(false))
+                chain.proceed()
             }
     }
 
     /**
-     * 触摸信号：落在小窗底部条带内就显示横条。
+     * 触摸信号：落到小窗底部就显示，抬手立即收回。
      *
      * 只观察、不消费事件——`chain.proceed()` 照常把事件交给原厂处理，
      * 所以点击关闭、拖拽缩放、底部上滑转迷你窗的行为完全不变。
+     *
+     * 续时覆盖整次触摸：拖动时手指很快离开底部条带，只在"还在条带内"的事件上续时
+     * 会让横条在拖动中途消失。显示期内任何 DOWN/MOVE 都算数，抬手就收。
      */
     private fun hookTouch(captionClass: Class<*>) {
         val target =
@@ -156,7 +155,10 @@ internal class ExternalHandleHookInstaller(
                 it.name == "dispatchTouchEvent" &&
                     it.parameterCount == 1 &&
                     it.parameterTypes[0] == MotionEvent::class.java
-            }?.apply { isAccessible = true } ?: return
+            }?.apply { isAccessible = true } ?: run {
+                ModuleLog.warn("EXTERNAL_HANDLE_TOUCH_TARGET_MISSING", null)
+                return
+            }
         module
             .hook(target)
             .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
@@ -164,59 +166,45 @@ internal class ExternalHandleHookInstaller(
             .intercept { chain ->
                 val caption = chain.thisObject as? View
                 val event = chain.getArg(0) as? MotionEvent
-                if (caption != null && event != null &&
-                    configuration.snapshot.externalHandleEffective &&
-                    isInBottomBand(caption, event)
-                ) {
-                    reveal(caption)
+                if (caption != null && event != null && configuration.snapshot.externalHandleEffective) {
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN,
+                        MotionEvent.ACTION_MOVE,
+                        -> if (revealed || isInBottomBand(caption, event)) reveal(caption)
+
+                        MotionEvent.ACTION_UP,
+                        MotionEvent.ACTION_CANCEL,
+                        -> if (revealed) hideNow()
+                    }
                 }
                 chain.proceed()
             }
     }
 
-    /**
-     * 布局入口：布局完成后确保处于隐藏态。
-     *
-     * 系统的布局链路里可能重新拉起操作区（迷你窗切换、主题变化都会走到）；
-     * 这里补一次隐藏，保证"平时一律隐藏"。
-     */
-    private fun hookLayout(captionClass: Class<*>) {
-        val target =
-            captionClass.declaredMethods.firstOrNull {
-                it.name == "onLayout" &&
-                    it.parameterCount == 5 &&
-                    it.parameterTypes[0] == java.lang.Boolean.TYPE &&
-                    it.parameterTypes.drop(1).all { t -> t == Integer.TYPE }
-            }?.apply { isAccessible = true } ?: return
-        module
-            .hook(target)
-            .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
-            .setId("free.system.external_handle_layout")
-            .intercept { chain ->
-                val result = chain.proceed()
-                val caption = chain.thisObject as? View
-                if (caption != null && !revealed &&
-                    configuration.snapshot.externalHandleEffective
-                ) {
-                    hideNow(caption)
-                }
-                result
-            }
-    }
+    /** 闸门是否生效：功能开启且当前不处于显示态。 */
+    private fun gateActive(): Boolean =
+        !revealed && configuration.snapshot.externalHandleEffective
 
     private fun reveal(caption: View) {
         lastCaption = WeakReference(caption)
         if (!revealed) {
             revealed = true
-            runCatching { OemReflection.call(caption, "updateThreeButtonVisibility", true) }
-            ModuleLog.debug("EXTERNAL_HANDLE_REVEALED") { "revealed" }
+            // 从"不画"切到"画"，必须请求重绘，否则要等下一帧别的原因触发。
+            runCatching { caption.invalidate() }
+            ModuleLog.debug("EXTERNAL_HANDLE_REVEALED") { "shown" }
         }
-        handler.removeCallbacks(hideAction)
-        handler.postDelayed(hideAction, HIDE_DELAY_MS)
+        // 兜底：真丢了抬手事件时 3 秒后自己收，不让横条挂在那儿。
+        handler.removeCallbacks(safetyHide)
+        handler.postDelayed(safetyHide, SAFETY_HIDE_MS)
     }
 
-    private fun hideNow(caption: View) {
-        runCatching { OemReflection.call(caption, "updateThreeButtonVisibility", false) }
+    private fun hideNow() {
+        handler.removeCallbacks(safetyHide)
+        if (!revealed) return
+        revealed = false
+        // 同理：从"画"切回"不画"，主动请求一帧把残影刷掉。
+        lastCaption?.get()?.let { caption -> runCatching { caption.invalidate() } }
+        ModuleLog.debug("EXTERNAL_HANDLE_HIDDEN") { "released" }
     }
 
     /**
@@ -241,26 +229,22 @@ internal class ExternalHandleHookInstaller(
         return y >= caption.height * BOTTOM_BAND_RATIO
     }
 
-    /** 设置关闭：把已经收起的横条与三点还回去。 */
+    /** 设置关闭：解除闸门，绘制立即回到系统原本的样子。 */
     private fun resetAll() {
-        handler.removeCallbacks(hideAction)
+        handler.removeCallbacks(safetyHide)
         revealed = false
-        val caption = lastCaption?.get()
-        if (caption != null) {
-            runCatching { OemReflection.call(caption, "updateThreeButtonVisibility", true) }
-        }
         lastCaption = null
         ModuleLog.info("EXTERNAL_HANDLE_RESTORED")
     }
 
     private companion object {
         /**
-         * 抬手后停留多久再收回（毫秒）。
+         * 兜底收回的超时（毫秒）。
          *
-         * 太短会在手指刚离开时闪一下；太长则小窗上滑之后横条还挂在那儿。
-         * 与全面屏手势指示条取同一个节奏。
+         * 正常路径抬手即收，这个值只在"抬手事件丢了"时生效，
+         * 取一个明显长于一次拖拽的时长即可，不参与常规节奏。
          */
-        const val HIDE_DELAY_MS = 1200L
+        const val SAFETY_HIDE_MS = 3000L
 
         /** 兜底判据：触点落在小窗底部这一段内即视为"摸到底部"。 */
         const val BOTTOM_BAND_RATIO = 0.75f

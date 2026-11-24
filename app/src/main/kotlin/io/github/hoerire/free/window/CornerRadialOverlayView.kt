@@ -1512,8 +1512,18 @@ internal class CornerRadialOverlayView(
         )
         selectedIndex = next
         selectedIndexState.intValue = next ?: NO_SELECTION
+        if (next == null) return
+        // 展开期间的命中是起手那一划扫过格子，不是挑定了一格：那时协调器会判
+        // SYSTEM_GESTURE_COMMIT_TOO_EARLY，提交不了。而命中圈跟着展开进度缩，
+        // 手指在动画头几十毫秒就能命中，这里的跟手震动会和 onAttachedToWindow 里的
+        // GESTURE_START 叠成两声（日志：两者相隔约 130ms）。
+        // 展开到位（entrySettled）之后才恢复逐格反馈，那时换格才是真的在挑。
+        if (!entrySettled) {
+            debug("SYSTEM_HIT_TICK_GATED_OPENING")
+            return
+        }
         val now = SystemClock.uptimeMillis()
-        if (next != null && now - lastTickUptime >= TICK_INTERVAL_MS) {
+        if (now - lastTickUptime >= TICK_INTERVAL_MS) {
             performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
             lastTickUptime = now
         }

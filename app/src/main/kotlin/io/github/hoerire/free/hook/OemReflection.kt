@@ -27,12 +27,6 @@ internal object OemReflection {
         return runCatching { field.get(instance) }.getOrNull()
     }
 
-    fun writeField(instance: Any?, name: String, value: Any?): Boolean {
-        if (instance == null) return false
-        val field = findField(instance.javaClass, name) ?: return false
-        return runCatching { field.set(instance, value) }.isSuccess
-    }
-
     fun findField(type: Class<*>, name: String): Field? {
         val key = type.name + "#" + name
         fieldCache[key]?.let { return it }

@@ -12,9 +12,9 @@ import android.util.Log
 /**
  * 让系统自己弹出原生「全部」面板。
  *
- * ColorOS 17.5.4 起侧边栏 UI 服务换成了 AIDL（`IUiProcessHandler`），2.7.2 的 Messenger
- * 握手对不上，会退到内建面板（本版本已移除）→ 更多面板打不开。
- * 这里直接绑 `EDGE_PANEL_UI_SERVICE`，按交易码让侧边栏弹出原生面板。
+ * ColorOS 17.5.4 起侧边栏 UI 服务换成了 AIDL（`IUiProcessHandler`），Messenger 握手在
+ * 那之后不再可靠；这条兜底直接绑 `EDGE_PANEL_UI_SERVICE`，按交易码让侧边栏弹出原生面板。
+ * 它只能"弹出"，拿不到内容句柄——要接管列表还是走 [ColorOsSidebarClient] 的主通道。
  */
 internal class NativeSidebarPanel(
     private val context: Context,

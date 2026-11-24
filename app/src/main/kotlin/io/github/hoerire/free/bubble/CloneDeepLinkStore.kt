@@ -10,7 +10,7 @@ import android.util.Base64
  * 背景：分身通知的 `contentIntent` 由分身实例（user 998）签发，但 SystemUI 手里只有一个
  * 不透明的 `PendingIntent`；直接 `send()` 会按 `PendingIntentRecord.key.userId` 落到主用户
  * 应用上，拿不到聊天参数。唯一正确的做法是拿到记录里的原始 Intent，在目标用户上下文里
- * 重建一个 `PendingIntent` 再发送（见 `CLONE_HANDOFF.md` §4）。
+ * 重建一个 `PendingIntent` 再发送（见 [io.github.hoerire.free.hook.NotificationCloneCaptureHook]）。
  *
  * 通道沿用 `ModulePreferences.KEY_PRE_SLEEP_ARMED` 的先例：`Settings.Global` 单键多行。
  * 只做**序列化 + 混淆**，不做加密——任何应用都能读到 Global 设置，这里的定位是

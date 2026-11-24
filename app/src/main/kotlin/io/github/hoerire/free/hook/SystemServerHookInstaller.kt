@@ -77,7 +77,7 @@ internal class SystemServerHookInstaller(
             logger = { priority, code, throwable -> ModuleLog.forward(priority, code, throwable) },
         ).install(classLoader)
         // 分身通知的深链 Intent：在通知入库时捕获，供 SystemUI 点气泡时在目标用户里重建发送。
-        // 只读字段 + 主线程写设置，不在钩子里跨进程（见类注释与 CLONE_HANDOFF.md §4）。
+        // 只读字段 + 主线程写设置，不在钩子里跨进程（见 NotificationCloneCaptureHook 的类注释）。
         NotificationCloneCaptureHook(module, configuration).install(classLoader)
         installForegroundObserver(classLoader)
         try {
