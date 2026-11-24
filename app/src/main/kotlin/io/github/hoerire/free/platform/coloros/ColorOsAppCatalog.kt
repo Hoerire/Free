@@ -39,6 +39,13 @@ internal data class RadialEntry(
     val icon: Bitmap,
     val badge: Bitmap? = null,
     val badgeLeftOffsetFraction: Float = 0f,
+    /**
+     * 可见内容直径占外框的比例（1 = 满幅）。
+     *
+     * 第三方主题图标常带透明内边距，同一个外框直径画出来会比系统图标小一圈；
+     * 扇形里没有对应图标的「更多」圆盘要靠这个值缩到同样的视觉直径。
+     */
+    val iconContentRatio: Float = 1f,
 )
 
 internal data class AppCatalogSnapshot(
@@ -138,7 +145,10 @@ internal class ColorOsAppCatalog(
                 entries.map { entry ->
                     val cachedIcon = iconCache[entry.target]
                     if (cachedIcon != null) {
-                        entry.copy(icon = cachedIcon)
+                        entry.copy(
+                            icon = cachedIcon,
+                            iconContentRatio = IconContentMetrics.contentDiameterRatio(cachedIcon),
+                        )
                     } else {
                         val drawable = content.radialSources[entry.target]
                         val base = if (drawable == null) {
@@ -153,7 +163,11 @@ internal class ColorOsAppCatalog(
                         // 扇形里的图标统一裁成圆：绘制期裁切对满底位图不生效，因此在生成阶段一次成圆。
                         val icon = IconContentMetrics.circular(base)
                         iconCache[entry.target] = icon
-                        entry.copy(icon = icon)
+                        entry.copy(
+                            icon = icon,
+                            // 量一次「图形占外框多大」，绘制侧据此把「更多」圆盘缩到同一视觉直径。
+                            iconContentRatio = IconContentMetrics.contentDiameterRatio(icon),
+                        )
                     }
                 }
             }

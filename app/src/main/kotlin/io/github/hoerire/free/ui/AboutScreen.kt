@@ -1,22 +1,35 @@
 package io.github.hoerire.free.ui
 
 import android.content.ActivityNotFoundException
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.unit.dp
 import io.github.hoerire.free.BuildConfig
 import io.github.hoerire.free.logic.LauncherIcon
 import io.github.hoerire.free.R
@@ -26,6 +39,10 @@ import io.github.hoerire.free.ui.component.SettingsGroup
 import io.github.hoerire.free.ui.component.SwitchPreference
 import io.github.hoerire.free.ui.component.BackOnlyScaffold
 import io.github.hoerire.free.ui.component.PreferenceIcon
+import io.github.suqi8.coui.kmp.layout.DialogButtonBar
+import io.github.suqi8.coui.kmp.layout.DialogButtonBarAction
+import io.github.suqi8.coui.kmp.overlay.OverlayDialog
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /**
  * 关于页。
@@ -44,6 +61,7 @@ internal fun AboutScreen(
 ) {
     val uriHandler = LocalUriHandler.current
     val available = update as? UpdateState.Available
+    var showReward by remember { mutableStateOf(false) }
     BackOnlyScaffold(
         onBack = onBack,
         overlay = {
@@ -51,6 +69,7 @@ internal fun AboutScreen(
                 update = update,
                 onDismissUpdate = onDismissUpdate,
             )
+            RewardOverlay(show = showReward, onDismiss = { showReward = false })
         },
     ) {
                 item(key = "about") {
@@ -116,6 +135,12 @@ internal fun AboutScreen(
                                 PreferenceIcon(ImageVector.vectorResource(R.drawable.ic_github))
                             },
                         )
+                        BasicComponent(
+                            title = stringResource(R.string.about_support_title),
+                            summary = stringResource(R.string.about_support_summary),
+                            onClick = { showReward = true },
+                            startAction = { PreferenceIcon(Icons.Rounded.Favorite) },
+                        )
                         SwitchPreference(
                             checked = verboseLogEnabled,
                             onCheckedChange = onVerboseLogChange,
@@ -157,3 +182,49 @@ private fun updateSummary(update: UpdateState): String =
         is UpdateState.Available ->
             stringResource(R.string.about_check_update_summary_available, update.version)
     }
+
+/**
+ * 「支持作者」弹窗：显示微信赞赏码。
+ *
+ * 二维码用 `drawable-nodpi` 存一份 960px 的图，按原像素贴、不做平滑缩放
+ * （`FilterQuality.None`）——插值会把码点边缘抹成灰，扫不出来。
+ * 弹窗本身跟着 `show` 常驻组合，关掉时只切可见性，保留 COUI 的关闭动画。
+ */
+@Composable
+private fun RewardOverlay(
+    show: Boolean,
+    onDismiss: () -> Unit,
+) {
+    OverlayDialog(
+        show = show,
+        title = stringResource(R.string.about_support_dialog_title),
+        onDismissRequest = onDismiss,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Image(
+                bitmap = ImageBitmap.imageResource(R.drawable.ic_reward_qr),
+                contentDescription = stringResource(R.string.about_support_dialog_title),
+                modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+                contentScale = ContentScale.Fit,
+                filterQuality = FilterQuality.None,
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = stringResource(R.string.about_support_dialog_hint),
+                style = COUITheme.textStyles.bodyS,
+                color = COUITheme.colorScheme.labelSecondary,
+            )
+        }
+        DialogButtonBar(
+            negative = null,
+            positive =
+                DialogButtonBarAction(
+                    text = stringResource(R.string.about_support_close),
+                    onClick = onDismiss,
+                ),
+        )
+    }
+}

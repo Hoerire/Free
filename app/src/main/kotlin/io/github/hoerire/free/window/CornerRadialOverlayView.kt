@@ -309,6 +309,10 @@ internal class CornerRadialOverlayView(
         fingerX.floatValue = x
         fingerY.floatValue = y
          radialImages.value = catalog.radialApps.map(::RadialImage)
+        // 诊断：「更多」圆盘这次按图标内容占比画到多少（主题图标带内边距时会小于 100）。
+        io.github.hoerire.free.log.ModuleLog.debug("Free") {
+            "RADIAL_MORE_PLATE_PCT_" + (morePlateScale() * 100f).roundToInt()
+        }
         panelImages = catalog.panelApps.associate { entry -> entry.target to entry.icon.asImageBitmap() }
         selectedIndex = null
         reachedOutward = false
@@ -848,6 +852,9 @@ internal class CornerRadialOverlayView(
             } else {
                 ((motion.radialProgress - 0.85f) / 0.15f).coerceIn(0f, 1f)
             }
+        // 「更多」圆盘跟随主题图标大小：这一圈图标的可见内容占外框多大，圆盘就按多大画。
+        // 主题图标带内边距时，圆盘按外框满径画会比旁边每一格都大一圈。
+        val morePlateScale = morePlateScale()
         layout.itemCenters.forEachIndexed { index, destination ->
             // 所有格共用同一条展开进度（不做错峰：错峰会拉开图标间距，
             // 视觉上连成一串残影）。展开/收起都由这条进度驱动。
@@ -931,7 +938,7 @@ internal class CornerRadialOverlayView(
                         drawSystemImage(image.icon, centerX, centerY, diameter, contentAlpha)
                     }
                 } else {
-                    drawMoreItem(centerX, centerY, diameter, contentAlpha, colors)
+                    drawMoreItem(centerX, centerY, diameter * morePlateScale, contentAlpha, colors)
                 }
                 // 流光特效：一颗小星头 + 一段由细到粗、由亮到淡的运动轨迹，绕着常亮光圈跑。
                 if (shimmerEnabled && ringProgress > 0f) {
@@ -1048,6 +1055,24 @@ internal class CornerRadialOverlayView(
             alpha = alpha,
             filterQuality = FilterQuality.High,
         )
+    }
+
+    /**
+     * 「更多」圆盘该按多少比例画：取这一圈图标可见内容占比的中位数。
+     *
+     * 系统图标基本满幅（比例 1），第三方主题图标常带透明内边距（比例 0.7 上下）。
+     * 圆盘没有自己的图标可量，只能跟着同圈的应用图标走——中位数比平均值稳，
+     * 混进一两个特殊图标也不会把圆盘带偏。圆盘直径本身仍随「图标大小」滑条缩放，
+     * 所以两侧是一起变大变小的。
+     */
+    private fun morePlateScale(): Float {
+        val ratios =
+            radialImages.value
+                .map { it.contentRatio }
+                .filter { it > 0f }
+                .sorted()
+        if (ratios.isEmpty()) return 1f
+        return ratios[ratios.size / 2].coerceIn(MORE_PLATE_MIN_SCALE, 1f)
     }
 
     /**
@@ -1807,6 +1832,9 @@ internal class CornerRadialOverlayView(
 
         const val MORE_DOT_RADIUS_FRACTION = 1.75f / 24f * 0.6f
         const val MORE_DOT_SPACING_FRACTION = 7.125f / 24f * 0.6f
+
+        /** 「更多」圆盘缩到多小为止：再小三点就挤成一团，宁可让圆盘略大于图标。 */
+        const val MORE_PLATE_MIN_SCALE = 0.55f
         const val PANEL_EXPAND_DAMPING = 0.9f
         const val PANEL_EXPAND_RESPONSE_SECONDS = 0.3f
 
@@ -1929,4 +1957,8 @@ private class RadialImage(entry: RadialEntry) {
     val icon: ImageBitmap = IconContentMetrics.circular(entry.icon).asImageBitmap()
     val badge: ImageBitmap? = entry.badge?.asImageBitmap()
     val badgeLeftOffsetFraction: Float = entry.badgeLeftOffsetFraction
+
+    /** 这一格的图形占外框多大：绘制侧据此把「更多」圆盘对齐到同一视觉直径。 */
+    val contentRatio: Float =
+        if (entry.iconContentRatio > 0f) entry.iconContentRatio else IconContentMetrics.contentDiameterRatio(entry.icon)
 }
