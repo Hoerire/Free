@@ -13,7 +13,7 @@ import java.lang.ref.WeakReference
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 全面屏手势指示条的「沉浸式隐藏」（设置项：小窗交互 → 沉浸式隐藏指示条）。
+ * 全面屏手势指示条的「沉浸式隐藏」（设置项：小窗交互 → 横条沉浸）。
  * 与 [ExternalHandleHookInstaller] 共用同一个开关。
  *
  * ## 它解决什么

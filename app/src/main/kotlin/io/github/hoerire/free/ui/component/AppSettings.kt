@@ -1,6 +1,7 @@
 package io.github.hoerire.free.ui.component
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -8,12 +9,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -262,12 +265,34 @@ internal fun SliderRow(
         title = title,
         summary = summary,
         startAction = icon,
-        valueText = valueText,
+        // 数值区改用固定宽度的 endActions：值本身是可变宽字符串（「9 dp」与「200 dp」差一大截），
+        // 交给 COUI 的 valueText 会随数值改变占宽，标题列可用宽度随之变化、说明文字重新折行，
+        // 行高跟着变，整页在拖动时上下跳。固定宽度后行高与列宽都不再受数值影响。
+        valueText = null,
+        endActions = {
+            Box(Modifier.width(SLIDER_VALUE_WIDTH), contentAlignment = Alignment.CenterEnd) {
+                androidx.compose.material3.Text(
+                    text = valueText,
+                    style = COUITheme.textStyles.bodyS,
+                    color =
+                        if (enabled) {
+                            COUITheme.colorScheme.labelSecondary
+                        } else {
+                            COUITheme.colorScheme.disabledNeutral
+                        },
+                    maxLines = 1,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                )
+            }
+        },
         valueRange = valueRange,
         onValueChangeFinished = onValueChangeFinished,
         enabled = enabled,
     )
 }
+
+/** 滑条数值区固定宽度：容纳「200 dp」「1000 ms」这类最长取值，避免拖动时列宽变化。 */
+private val SLIDER_VALUE_WIDTH = 72.dp
 
 /**
  * 选项行：点击后由 COUI 弹出底部单选面板。

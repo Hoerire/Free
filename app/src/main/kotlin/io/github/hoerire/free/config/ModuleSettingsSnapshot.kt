@@ -32,7 +32,7 @@ internal data class ModuleSettingsSnapshot(
         ModulePreferences.DEFAULT_OUTSIDE_TAP_CLOSE_MODE,
     val handleSwipeUpToMiniEnabled: Boolean =
         ModulePreferences.DEFAULT_HANDLE_SWIPE_UP_TO_MINI_ENABLED,
-    /** 沉浸式隐藏指示条：小窗横条与三点、全面屏手势指示条平时隐藏，触摸后重新显示。 */
+    /** 横条沉浸：小窗横条与三点、全面屏手势指示条平时隐藏，触摸后重新显示。 */
     val externalHandleEnabled: Boolean =
         ModulePreferences.DEFAULT_EXTERNAL_HANDLE_ENABLED,
     val pauseInLandscape: Boolean = ModulePreferences.DEFAULT_PAUSE_IN_LANDSCAPE,
@@ -78,8 +78,11 @@ internal data class ModuleSettingsSnapshot(
     val hideZoomInRecents: Boolean = ModulePreferences.DEFAULT_HIDE_ZOOM_IN_RECENTS,
     /** 长按迷你窗静音，再次长按恢复；普通小窗不响应。 */
     val longPressMuteEnabled: Boolean = ModulePreferences.DEFAULT_LONG_PRESS_MUTE,
-    /** 返回增强触发后的动作；[ModulePreferences.PREDICTIVE_BACK_ACTION_DISABLED] 为关闭。 */
-    val predictiveBackAction: Int = ModulePreferences.DEFAULT_PREDICTIVE_BACK_ACTION,
+    /** 返回增强：边缘内滑后上滑切小窗、下拉打开更多。 */
+    val predictiveBackEnabled: Boolean = ModulePreferences.DEFAULT_PREDICTIVE_BACK_ENABLED,
+    /** 返回增强的触发距离（dp）：内滑后上滑或下拉超过该距离才接管。 */
+    val predictiveBackSwipeDistanceDp: Int =
+        ModulePreferences.DEFAULT_PREDICTIVE_BACK_SWIPE_DISTANCE_DP,
     /** 贴边挂机：收成贴边浮标后保持应用继续运行。 */
     val floatKeepAlive: Boolean = ModulePreferences.DEFAULT_FLOAT_KEEP_ALIVE,
     /** 扇形呼出后未选择任何条目时保持显示，不自动收起。 */
@@ -132,6 +135,8 @@ internal data class ModuleSettingsSnapshot(
     val bubbleAutoDismiss: Boolean = ModulePreferences.DEFAULT_BUBBLE_AUTO_DISMISS,
     /** 到点直接消失（既不贴边收起也不原地变暗）。 */
     val bubbleDismissOnTimeout: Boolean = ModulePreferences.DEFAULT_BUBBLE_DISMISS_ON_TIMEOUT,
+    /** 只通知：气泡不接收触摸，点按与拖动直接穿透到下层应用。 */
+    val bubbleNoticeOnly: Boolean = ModulePreferences.DEFAULT_BUBBLE_NOTICE_ONLY,
     /** 装饰动效是否常驻（贴边呼吸、色散边）；关闭后只在交互时重绘。 */
     val bubbleMotionContinuous: Boolean = ModulePreferences.DEFAULT_BUBBLE_MOTION_CONTINUOUS,
     /** 状态栏滚动：最新通知在时钟位置滚动显示。子开关，受气泡总闸约束。 */
@@ -189,10 +194,12 @@ internal data class ModuleSettingsSnapshot(
     /** 长按迷你窗只跟模块总开关走。 */
     val longPressMuteEffective: Boolean get() = enabled && longPressMuteEnabled
     /** 返回增强只跟模块总开关走：模块停用时等同关闭。 */
-    val predictiveBackActionEffective: Int
+    val predictiveBackEffective: Boolean get() = enabled && predictiveBackEnabled
+
+    /** 返回增强的触发距离（dp），已按上下限钳位。 */
+    val predictiveBackSwipeDistanceDpEffective: Int
         get() =
-            if (enabled) ModulePreferences.coercePredictiveBackAction(predictiveBackAction)
-            else ModulePreferences.PREDICTIVE_BACK_ACTION_DISABLED
+            ModulePreferences.coercePredictiveBackSwipeDistanceDp(predictiveBackSwipeDistanceDp)
     /** 快速上滑转迷你独立于启动场景开关，只跟模块总开关走。 */
     val handleSwipeUpToMiniEffective: Boolean get() = enabled && handleSwipeUpToMiniEnabled
 
@@ -302,10 +309,14 @@ internal data class ModuleSettingsSnapshot(
             .putBoolean(ModulePreferences.KEY_HIDE_ZOOM_IN_RECENTS, hideZoomInRecents)
             .putBoolean(ModulePreferences.KEY_FLOAT_KEEP_ALIVE, floatKeepAlive)
             .putBoolean(ModulePreferences.KEY_LONG_PRESS_MUTE, longPressMuteEnabled)
+            .putBoolean(ModulePreferences.KEY_PREDICTIVE_BACK_ENABLED, predictiveBackEnabled)
             .putInt(
-                ModulePreferences.KEY_PREDICTIVE_BACK_ACTION,
-                ModulePreferences.coercePredictiveBackAction(predictiveBackAction),
+                ModulePreferences.KEY_PREDICTIVE_BACK_SWIPE_DISTANCE_DP,
+                ModulePreferences.coercePredictiveBackSwipeDistanceDp(predictiveBackSwipeDistanceDp),
             )
+            // 按时长触发、三选一动作的旧键：升级后清掉，避免残留值干扰排查。
+            .remove(ModulePreferences.LEGACY_KEY_PREDICTIVE_BACK_HOLD_MS)
+            .remove(ModulePreferences.LEGACY_KEY_PREDICTIVE_BACK_ACTION)
             // 旧分项键不再写入，升级后一并清除，避免残留值干扰排查。
             .remove(ModulePreferences.LEGACY_KEY_ZOOM_INTERACTION_ENABLED)
             .putBoolean(ModulePreferences.KEY_RADIAL_INTERACTION_ENABLED, radialInteractionEnabled)
@@ -393,6 +404,7 @@ internal data class ModuleSettingsSnapshot(
                 ModulePreferences.KEY_BUBBLE_DISMISS_ON_TIMEOUT,
                 bubbleDismissOnTimeout,
             )
+            .putBoolean(ModulePreferences.KEY_BUBBLE_NOTICE_ONLY, bubbleNoticeOnly)
             .putString(
                 ModulePreferences.KEY_BLACKLIST_PACKAGES,
                 blacklistPackages.joinToString("\n"),
@@ -678,12 +690,21 @@ internal data class ModuleSettingsSnapshot(
                     ModulePreferences.KEY_LONG_PRESS_MUTE,
                     ModulePreferences.DEFAULT_LONG_PRESS_MUTE,
                 ),
-                predictiveBackAction = ModulePreferences.coercePredictiveBackAction(
+                // 旧版是「关闭 / 小窗 / 更多」三选一，取值 >= 0 即视为开启，读一次即迁移。
+                predictiveBackEnabled = preferences.getBoolean(
+                    ModulePreferences.KEY_PREDICTIVE_BACK_ENABLED,
                     preferences.getInt(
-                        ModulePreferences.KEY_PREDICTIVE_BACK_ACTION,
-                        ModulePreferences.DEFAULT_PREDICTIVE_BACK_ACTION,
-                    ),
+                        ModulePreferences.LEGACY_KEY_PREDICTIVE_BACK_ACTION,
+                        ModulePreferences.LEGACY_PREDICTIVE_BACK_ACTION_DISABLED,
+                    ) >= 0,
                 ),
+                predictiveBackSwipeDistanceDp =
+                    ModulePreferences.coercePredictiveBackSwipeDistanceDp(
+                        preferences.getInt(
+                            ModulePreferences.KEY_PREDICTIVE_BACK_SWIPE_DISTANCE_DP,
+                            ModulePreferences.DEFAULT_PREDICTIVE_BACK_SWIPE_DISTANCE_DP,
+                        ),
+                    ),
                 radialKeepOpen = preferences.getBoolean(
                     ModulePreferences.KEY_RADIAL_KEEP_OPEN,
                     ModulePreferences.DEFAULT_RADIAL_KEEP_OPEN,
@@ -856,6 +877,10 @@ internal data class ModuleSettingsSnapshot(
                 bubbleDismissOnTimeout = preferences.getBoolean(
                     ModulePreferences.KEY_BUBBLE_DISMISS_ON_TIMEOUT,
                     ModulePreferences.DEFAULT_BUBBLE_DISMISS_ON_TIMEOUT,
+                ),
+                bubbleNoticeOnly = preferences.getBoolean(
+                    ModulePreferences.KEY_BUBBLE_NOTICE_ONLY,
+                    ModulePreferences.DEFAULT_BUBBLE_NOTICE_ONLY,
                 ),
             )
         }

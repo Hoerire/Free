@@ -4,13 +4,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Gesture
 import androidx.compose.material.icons.rounded.PictureInPicture
-import io.github.hoerire.free.config.ModulePreferences
+import androidx.compose.material.icons.rounded.SwipeDown
 import androidx.compose.material.icons.rounded.SwipeUp
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import io.github.hoerire.free.R
+import io.github.hoerire.free.config.ModulePreferences
 import io.github.hoerire.free.config.OutsideTapCloseMode
 import io.github.hoerire.free.framework.FrameworkConnectionState
 import io.github.hoerire.free.ui.component.ListChoicePreference
@@ -30,7 +31,8 @@ internal fun GestureScreen(
     onBack: () -> Unit,
     onHandleSwipeUpToMiniEnabledChange: (Boolean) -> Unit,
     onLongPressMuteChange: (Boolean) -> Unit,
-    onPredictiveBackActionChange: (Int) -> Unit,
+    onPredictiveBackEnabledChange: (Boolean) -> Unit,
+    onPredictiveBackSwipeDistanceDpChange: (Int) -> Unit,
     onOutsideTapCloseModeChange: (OutsideTapCloseMode) -> Unit,
 ) {
     val enabled = state.settingsEditable && state.settings.enabled
@@ -64,44 +66,29 @@ internal fun GestureScreen(
                     enabled = enabled,
                     startAction = { PreferenceIcon(Icons.Rounded.PictureInPicture, enabled) },
                 )
-                val predictiveBackActions =
-                    listOf(
-                        ModulePreferences.PREDICTIVE_BACK_ACTION_DISABLED,
-                        ModulePreferences.PREDICTIVE_BACK_ACTION_ZOOM,
-                        ModulePreferences.PREDICTIVE_BACK_ACTION_MORE_PANEL,
-                    )
-                val predictiveBackItems =
-                    listOf(
-                        stringResource(R.string.predictive_back_action_disabled),
-                        stringResource(R.string.predictive_back_action_zoom),
-                        stringResource(R.string.predictive_back_action_panel),
-                    )
-                val predictiveBackSelected =
-                    predictiveBackActions
-                        .indexOf(state.settings.predictiveBackAction)
-                        .coerceIn(0, predictiveBackItems.lastIndex)
-                // 说明文字跟着当前选中的动作走：切到「更多」之后还写"在两者之间切换"会误导。
-                val predictiveBackDescription =
-                    stringResource(
-                        when (predictiveBackActions[predictiveBackSelected]) {
-                            ModulePreferences.PREDICTIVE_BACK_ACTION_ZOOM ->
-                                R.string.predictive_back_desc_zoom
-                            ModulePreferences.PREDICTIVE_BACK_ACTION_MORE_PANEL ->
-                                R.string.predictive_back_desc_panel
-                            else -> R.string.predictive_back_desc_off
-                        },
-                    )
-                ListChoicePreference(
+                // 返回增强：方向即动作——上滑切小窗、下拉打开「更多」，因此只需要一个开关。
+                SwitchPreference(
+                    checked = state.settings.predictiveBackEnabled,
+                    onCheckedChange = onPredictiveBackEnabledChange,
                     title = stringResource(R.string.predictive_back_title),
-                    icon = { PreferenceIcon(Icons.Rounded.Gesture, enabled) },
-                    selected = predictiveBackSelected,
-                    values = predictiveBackItems.indices.toList(),
-                    valueText = { predictiveBackItems[it] },
-                    onSelected = { index ->
-                        predictiveBackActions.getOrNull(index)?.let(onPredictiveBackActionChange)
-                    },
+                    summary = stringResource(R.string.predictive_back_summary),
                     enabled = enabled,
-                    description = predictiveBackDescription,
+                    startAction = { PreferenceIcon(Icons.Rounded.Gesture, enabled) },
+                )
+                // 滑动距离只在返回增强开启时才有意义，关闭时置灰。
+                RemoteDpSliderPreference(
+                    icon = Icons.Rounded.SwipeDown,
+                    confirmedValue = state.settings.predictiveBackSwipeDistanceDp,
+                    isUpdating = state.isUpdating,
+                    enabled = enabled && state.settings.predictiveBackEnabled,
+                    title = stringResource(R.string.predictive_back_swipe_distance_title),
+                    summary = stringResource(R.string.predictive_back_swipe_distance_summary),
+                    minDp = ModulePreferences.MIN_PREDICTIVE_BACK_SWIPE_DISTANCE_DP,
+                    maxDp = ModulePreferences.MAX_PREDICTIVE_BACK_SWIPE_DISTANCE_DP,
+                    coerceDp = ModulePreferences::coercePredictiveBackSwipeDistanceDp,
+                    // 距离没有屏幕叠加预览，回调只为满足滑条接口。
+                    onPreviewChange = {},
+                    onCommit = onPredictiveBackSwipeDistanceDpChange,
                 )
                 ListChoicePreference(
                     title = stringResource(R.string.outside_tap_close_title),

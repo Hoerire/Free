@@ -29,7 +29,7 @@ internal class SystemServerHookInstaller(
         // 触发延迟：把设置里的长按阈值写进系统设置，供应用侧的拖拽判定使用。
         LongPressTimeoutHook.install(configuration)
         HandleSwipeUpHookInstaller(module, configuration, environment).install(classLoader)
-        // 沉浸式隐藏指示条（小窗交互 → 沉浸式隐藏指示条）：只调系统自身的显隐入口，不建视图、不改布局参数。
+        // 横条沉浸（小窗交互 → 横条沉浸）：只调系统自身的显隐入口，不建视图、不改布局参数。
         ExternalHandleHookInstaller(module, configuration).install(classLoader)
         io.github.hoerire.free.hook.launch.ActivityStarterZoomInjector(
             module,

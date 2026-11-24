@@ -255,9 +255,7 @@ internal object FavoriteGroupInjector {
             d { "buildRows: 收藏不完整 picked=" + picked.size + " order=" + order.size }
             return null
         }
-        val pickedAliases = picked.mapNotNull { aliasOf(it) }.toHashSet()
-        // 收藏 + 扇形里固定项：两组同源，都不再出现在「最近」。
-        val recent = recentItems(loader, context, pickedAliases + pinnedAliases())
+        val recent = recentItems(loader, context)
         val head = makeTitle(loader, null, "收藏")
         val recentTitle = if (recent.isNotEmpty()) makeTitle(loader, null, "最近") else null
         val out = ArrayList<Any?>(picked.size + recent.size + 2)
@@ -378,9 +376,7 @@ internal object FavoriteGroupInjector {
             val head = groupTitles.getOrNull(0)
             val second = groupTitles.getOrNull(1)
             // 最近打开：直接采用侧边栏基于使用情况访问权限统计出的名单。
-            val pickedAliases = picked.mapNotNull { aliasOf(it) }.toHashSet()
-            // 兜底路径与 buildRows 用同一套排除集，否则「收藏」项会重复出现在最近列表里。
-            val recentItems = recentItems(loader, context, pickedAliases + pinnedAliases())
+            val recentItems = recentItems(loader, context)
             d { "picked=" + picked.size + " recent=" + recentItems.size +
                 " second=" + (second != null) }
             d { "recentAliases=" + recentItems.mapNotNull { aliasOf(it) } }
@@ -415,40 +411,12 @@ internal object FavoriteGroupInjector {
     }
 
     /**
-     * 扇形里固定项的 alias 提供者，由 SidebarHookInstaller 注入。
-     *
-     * 侧边栏进程自己读不到模块配置，固定项只能由安装器转交；取不到时按空集合处理，
-     * 「最近」恢复为只排除收藏的旧行为，不影响面板。
-     */
-    @Volatile
-    private var pinnedProvider: (() -> Set<String>)? = null
-
-    fun attachPinnedTargets(provider: () -> Set<String>) {
-        pinnedProvider = provider
-    }
-
-    /** 固定项 → 面板 alias：应用是「包名#入口」，侧边栏条目用它自己的 alias。 */
-    fun aliasOfTarget(target: io.github.hoerire.free.config.PinnedTarget): String =
-        when (target) {
-            is io.github.hoerire.free.config.PinnedTarget.App -> target.packageName + "#" + target.className
-            is io.github.hoerire.free.config.PinnedTarget.Sidebar -> target.alias
-        }
-
-    private fun pinnedAliases(): Set<String> = try {
-        pinnedProvider?.invoke() ?: emptySet()
-    } catch (t: Throwable) {
-        d(t) { "pinned aliases fail" }
-        emptySet()
-    }
-
-    /**
      * 「最近打开的应用」：侧边栏本身就是按「使用情况访问权限」统计的，
      * 这里直接用同一个 UsageStatsManager 查，按最后使用时间倒序，再映射成面板条目。
      */
     private fun recentItems(
         loader: ClassLoader,
         context: android.content.Context?,
-        exclude: Set<String>,
     ): List<Any?> {
         if (context == null) {
             d { "recent: no context" }
@@ -505,8 +473,6 @@ internal object FavoriteGroupInjector {
                 val activity = activityOf(context, pkg) ?: return@mapNotNull null
                 buildAliasItem(loader, context, pkg + "#" + activity)
             }
-            // 收藏与扇形固定项都不再出现在「最近」里。
-            .filter { aliasOf(it)?.let { a -> a !in exclude } ?: true }
             .toList()
             .distinctBy { aliasOf(it) }
         d { "recent built=" + picked.size + " " + picked.mapNotNull { aliasOf(it) }.take(12) }

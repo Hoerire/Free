@@ -98,13 +98,6 @@ internal class SidebarHookInstaller(private val module: XposedModule, private va
         io.github.hoerire.free.log.ModuleLog.attach { priority, code, throwable ->
             module.log(priority, "Free", code, throwable)
         }
-        // 「最近」要排除扇形里固定的应用：侧边栏进程读不到模块配置，由这里按当前快照转交。
-        // 两组扇形都要排除，否则只在第二组里的应用会同时出现在「最近」里。
-        io.github.hoerire.free.platform.coloros.FavoriteGroupInjector.attachPinnedTargets {
-            (configuration.snapshot.pinnedTargets + configuration.snapshot.alternatePinnedTargets)
-                .map(io.github.hoerire.free.platform.coloros.FavoriteGroupInjector::aliasOfTarget)
-                .toSet()
-        }
         val handles = mutableListOf<XposedInterface.HookHandle>()
         try {
             val serviceClass = loader.loadClass(ColorOsSidebarTarget.SERVICE_CLASS)

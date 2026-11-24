@@ -231,19 +231,29 @@ internal class BubbleCoordinator(
         val item = queue.head ?: return
         val bubble = BubbleSurfaceView(context, BubbleAppearance(settings, placement))
         val landscape = isLandscape()
+        // 只通知模式下强制浮动、且不吸附边缘：贴边气泡在 show() 里不计时，
+        // 而用户又点不动也拖不走，会变成一块收不掉的残留。
+        val noticeOnly = noticeOnlyFor(item)
         if (hasRuntimePosition && runtimeLandscape == landscape) {
-            bubble.applyRuntimePosition(runtimeX, runtimeY, runtimeDock)
+            bubble.applyRuntimePosition(runtimeX, runtimeY, if (noticeOnly) 0 else runtimeDock)
         } else {
             bubble.applyPersistedPosition(
                 placement.positionX(landscape),
                 placement.positionY(landscape),
-                placement.dockEdge(landscape),
+                if (noticeOnly) 0 else placement.dockEdge(landscape),
             )
         }
         bubble.setIcon(item.payload.icon)
         bubble.setAppBadge(item.payload.appIcon)
-        bubble.setDockingEnabled(!(item.suggestionId != null && settings.suggestionNoEdge))
-        bubble.setAutoDismissValidator { settings.autoDismiss && !screenSuspended }
+        bubble.setDockingEnabled(
+            !noticeOnly && !(item.suggestionId != null && settings.suggestionNoEdge),
+        )
+        // 只通知模式下到点必须照常生效：那颗气泡既不收触摸也拖不走，
+        // 一旦漏掉到点就再也收不回来，所以校验只看「屏幕是否可用」。
+        // 这里按队首实时求值，设置中途切换也能跟上。
+        bubble.setAutoDismissValidator {
+            (settings.autoDismiss || noticeOnlyFor(queue.head)) && !screenSuspended
+        }
         bubble.setOnClickAction {
             if (windows.bubble === bubble) activateHead(burst = true)
         }
@@ -310,7 +320,14 @@ internal class BubbleCoordinator(
             }
         }
         val timeout = timeoutFor(item)
-        if (!windows.showBubble(bubble, timeout.seconds, timeout.dim, timeout.dismiss)) {
+        if (!windows.showBubble(
+                bubble,
+                timeout.seconds,
+                timeout.dim,
+                timeout.dismiss,
+                timeout.notice,
+            )
+        ) {
             log("BUBBLE_SHOW_REJECTED_" + item.packageName, bubble.getShowError())
             if (screenSuspended || !isScreenInteractive()) return
             if (item.notificationKey != null) {
@@ -347,7 +364,7 @@ internal class BubbleCoordinator(
         bubble.popOut()
         shownItem = item
         val timeout = timeoutFor(item)
-        bubble.updateTimeout(timeout.seconds, timeout.dim, timeout.dismiss)
+        bubble.updateTimeout(timeout.seconds, timeout.dim, timeout.dismiss, timeout.notice)
         bubble.setIconAnimated(item.payload.icon)
         bubble.setAppBadge(item.payload.appIcon)
         updateChildren()
@@ -361,7 +378,7 @@ internal class BubbleCoordinator(
         bubble.setIconAnimated(next.payload.icon)
         bubble.setAppBadge(next.payload.appIcon)
         val timeout = timeoutFor(next)
-        bubble.updateTimeout(timeout.seconds, timeout.dim, timeout.dismiss)
+        bubble.updateTimeout(timeout.seconds, timeout.dim, timeout.dismiss, timeout.notice)
         updateChildren()
         showPreview()
     }
@@ -536,6 +553,13 @@ internal class BubbleCoordinator(
             log("BUBBLE_PREVIEW_SKIP_OFF", null)
             return
         }
+        val item = queue.head ?: return
+        if (noticeOnlyFor(item)) {
+            // 只通知：气泡本身已经不接收触摸，再挂一张可点的内容卡自相矛盾。
+            // 即时建议不走这一条（见 noticeOnlyFor），它的内容卡仍可点。
+            log("BUBBLE_PREVIEW_SKIP_NOTICE_ONLY", null)
+            return
+        }
         if (windows.preview != null) {
             log("BUBBLE_PREVIEW_SKIP_EXISTING", null)
             return
@@ -545,7 +569,6 @@ internal class BubbleCoordinator(
             return
         }
         val bubble = windows.bubble ?: return
-        val item = queue.head ?: return
         if (deviceLocked()) {
             log("BUBBLE_PREVIEW_SKIP_LOCKED", null)
             return
@@ -921,7 +944,7 @@ internal class BubbleCoordinator(
             // 免打扰关闭时保持旧行为：气泡留在原位，点亮即可看到。
             bubble.setStackExpanded(false)
             bubble.visibility = View.VISIBLE
-            bubble.updateTimeout(0, false)
+            bubble.updateTimeout(0, false, noticeOnly = noticeOnlyFor(queue.head))
         }
     }
 
@@ -932,7 +955,7 @@ internal class BubbleCoordinator(
         val bubble = windows.bubble
         if (bubble != null && bubble.isAttached()) {
             val timeout = timeoutFor(queue.head)
-            bubble.updateTimeout(timeout.seconds, timeout.dim, timeout.dismiss)
+            bubble.updateTimeout(timeout.seconds, timeout.dim, timeout.dismiss, timeout.notice)
             updateChildren()
             if (!settings.previewEdgeOnly || bubble.isDocked()) {
                 handler.postDelayed({ showPreview() }, SCREEN_ON_PREVIEW_DELAY_MS)
@@ -978,7 +1001,7 @@ internal class BubbleCoordinator(
         }
         if (bubble != null && head != null) {
             val timeout = timeoutFor(queue.head)
-            bubble.updateTimeout(timeout.seconds, timeout.dim, timeout.dismiss)
+            bubble.updateTimeout(timeout.seconds, timeout.dim, timeout.dismiss, timeout.notice)
         }
     }
 
@@ -987,14 +1010,29 @@ internal class BubbleCoordinator(
         item?.timeoutOverride?.let { override ->
             return if (override > 0) BubbleTimeout(override, false) else BubbleTimeout(0, false)
         }
-        if (deviceLocked() || !screenInteractive) return BubbleTimeout(0, false)
-        if (!settings.autoDismiss) return BubbleTimeout(0, false)
+        val noticeOnly = noticeOnlyFor(item)
+        if (deviceLocked() || !screenInteractive) {
+            return BubbleTimeout(0, false, notice = noticeOnly)
+        }
+        // 只通知模式下即使「到点自动收起」是关的也照常计时：
+        // 这个气泡既不收触摸也拖不走，不给它一个到点就是永久的残留。
+        if (!settings.autoDismiss && !noticeOnly) return BubbleTimeout(0, false)
         return BubbleTimeout(
             settings.timeoutSeconds,
-            settings.dimOnTimeout,
-            settings.dismissOnTimeout,
+            settings.dimOnTimeout && !noticeOnly,
+            settings.dismissOnTimeout || noticeOnly,
+            noticeOnly,
         )
     }
+
+    /**
+     * 「只通知」只作用于真正的气泡通知，[BubbleItem.suggestionId] 非空即即时建议。
+     *
+     * 即时建议的整个价值就在点一下执行（常亮、复制、开手电筒），把窗口设成不接收触摸
+     * 等于把它废掉；而且它自带 timeoutOverride，不参与气泡的停留策略。
+     */
+    private fun noticeOnlyFor(item: BubbleItem?): Boolean =
+        settings.noticeOnly && item?.suggestionId == null
 
     private fun rememberPosition(bubble: BubbleSurfaceView) {
         // 贴边状态不参与“下一条气泡出现在哪”，保留上一次的浮动坐标。
@@ -1069,6 +1107,8 @@ internal class BubbleCoordinator(
         val seconds: Int,
         val dim: Boolean,
         val dismiss: Boolean = false,
+        /** 只通知：窗口不接收触摸，到点直接消失。 */
+        val notice: Boolean = false,
     )
 
     private companion object {

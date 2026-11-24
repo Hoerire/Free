@@ -12,7 +12,7 @@ import java.lang.ref.WeakReference
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 小窗的底部横条与顶部三点（设置项：小窗交互 → 沉浸式隐藏指示条）。
+ * 小窗的底部横条与顶部三点（设置项：小窗交互 → 横条沉浸）。
  *
  * ## 行为
  *

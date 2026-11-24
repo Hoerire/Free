@@ -50,7 +50,7 @@ internal class SystemUiHookInstaller(
                             ModuleLog.warn("SYSTEMUI_BUBBLE_INSTALL_FAILED", it)
                         }
                         installSettingsObserver(context)
-                        // 全面屏手势指示条：与「沉浸式隐藏指示条」共用一个开关，空闲时不绘制、触摸时出现。
+                        // 全面屏手势指示条：与「横条沉浸」共用一个开关，空闲时不绘制、触摸时出现。
                         // 不撤 inset、不改布局，所以应用不会像官方开关那样整体下沉。
                         runCatching {
                             NavigationHandleImmersiveHook(module, configuration)
@@ -58,11 +58,11 @@ internal class SystemUiHookInstaller(
                         }.onFailure {
                             ModuleLog.warn("SYSTEMUI_NAV_HANDLE_IMMERSIVE_FAILED", it)
                         }
-                        // 返回增强：边缘内滑不松手超过 0.5 秒，当前应用原地变小窗。
+                        // 返回增强：边缘内滑后上滑切小窗、下拉打开「更多」。
                         // 只在 ColorOS 17+ 接线（返回增强手势与本地小窗切换都是这一代才有）。
                         if (RomFlavor.isColorOs17OrNewer) {
                             runCatching {
-                                PredictiveBackHoldHook(module, configuration, context)
+                                PredictiveBackSwipeHook(module, configuration, context)
                                     .install(classLoader)
                             }.onFailure {
                                 ModuleLog.warn("SYSTEMUI_PREDICTIVE_BACK_INSTALL_FAILED", it)

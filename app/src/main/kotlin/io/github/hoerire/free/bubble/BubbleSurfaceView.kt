@@ -123,6 +123,14 @@ internal class BubbleSurfaceView(
     private var timeoutSeconds = 0
     private var dimOnTimeout = false
     private var dismissOnTimeout = false
+    /**
+     * 只通知：整颗气泡不接收触摸。
+     *
+     * 做法是把窗口标成 FLAG_NOT_TOUCHABLE —— 命中测试在 WMS 侧就把这一块跳过，
+     * 点按与拖动会落到下层应用，气泡本体一次 onTouchEvent 都收不到。
+     * 因此不能靠拦触摸事件来“忽略点击”，那样下层应用仍拿不到这次手势。
+     */
+    private var noticeOnly = false
     private var timeoutDimmed = false
     private var landingSuppressed = false
     private var landscape = false
@@ -578,9 +586,16 @@ internal class BubbleSurfaceView(
         safeBottom = bounds.height() - bars.bottom - viewSize - dp(12f)
     }
 
-    fun show(timeoutSeconds: Int, dimOnTimeout: Boolean, dismissOnTimeout: Boolean): Boolean {
+    fun show(
+        timeoutSeconds: Int,
+        dimOnTimeout: Boolean,
+        dismissOnTimeout: Boolean,
+        noticeOnly: Boolean = false,
+    ): Boolean {
         val wm = windowManager
         if (attached || wm == null) return false
+        this.noticeOnly = noticeOnly
+        applyNoticeOnlyFlag()
         try {
             wm.addView(this, params)
             attached = true
@@ -614,11 +629,25 @@ internal class BubbleSurfaceView(
 
     fun getShowError(): Throwable? = shownError
 
-    fun updateTimeout(seconds: Int, dimOnTimeout: Boolean, dismissOnTimeout: Boolean = false) {
+    fun updateTimeout(
+        seconds: Int,
+        dimOnTimeout: Boolean,
+        dismissOnTimeout: Boolean = false,
+        noticeOnly: Boolean = false,
+    ) {
         timeoutSeconds = Math.max(0, seconds)
         this.dimOnTimeout = dimOnTimeout
         this.dismissOnTimeout = dismissOnTimeout
         timeoutDimmed = false
+        if (this.noticeOnly != noticeOnly) {
+            // 开关实时生效：切换时直接改窗口标志，不重建气泡。
+            this.noticeOnly = noticeOnly
+            applyNoticeOnlyFlag()
+        }
+        if (noticeOnly && dockedEdge != 0) {
+            // 贴边气泡不计时，而只通知模式下既点不动也拖不走：先弹回浮动位置再计时。
+            popOut()
+        }
         mainHandler.removeCallbacks(timeoutAction)
         // 恢复常态透明度（贴边与浮动都适用）：息屏期间入场动画可能没跑完，
         // 否则点亮后气泡会停在不可见状态。
@@ -1268,8 +1297,9 @@ internal class BubbleSurfaceView(
             ModuleLog.debug("BubbleNotify") { "忽略过期的到点检查：自动收起已关闭" }
             return
         }
-        if (dismissOnTimeout) {
-            // 到点直接消失：不贴边、不变暗。
+        if (dismissOnTimeout || noticeOnly) {
+            // 到点直接消失：不贴边、不变暗。只通知模式下必定走这里——
+            // 一颗点不动、拖不走的贴边气泡会永久残留，而用户没有任何手段收掉它。
             dismiss("timeout")
             return
         }
@@ -1440,6 +1470,29 @@ internal class BubbleSurfaceView(
         }
         swipeListener?.onSwipe(distanceY < 0f)
         return true
+    }
+
+    /**
+     * 按 [noticeOnly] 同步窗口的触摸标志。
+     *
+     * FLAG_NOT_TOUCHABLE 让 WMS 在命中测试里直接跳过这块窗口，事件落到下层应用；
+     * 只加不减会留下「开着只通知、关掉后气泡点不动」的残留，所以两种状态都要显式写一遍。
+     * 未挂出时只改字段，addView 时一次生效，避免对未 attach 的窗口调 updateViewLayout。
+     */
+    private fun applyNoticeOnlyFlag() {
+        val wanted = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        params.flags = if (noticeOnly) {
+            params.flags or wanted
+        } else {
+            params.flags and wanted.inv()
+        }
+        if (!attached || dismissing) return
+        try {
+            windowManager!!.updateViewLayout(this, params)
+        } catch (error: Throwable) {
+            shownError = error
+            ModuleLog.warn("BUBBLE_NOTICE_ONLY_FLAG_FAILED", error)
+        }
     }
 
     /**

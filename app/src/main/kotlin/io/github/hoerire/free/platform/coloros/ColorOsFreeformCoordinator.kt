@@ -162,10 +162,10 @@ internal class ColorOsFreeformCoordinator(
         }
 
     /**
-     * 返回增强：SystemUI 在边缘内滑停住 0.5 秒后触发两个动作之一。
+     * 返回增强：SystemUI 在边缘内滑后按滑动方向触发对应动作。
      *
-     * - [ModulePreferences.ACTION_PREDICTIVE_BACK_HOLD]：焦点应用在「全屏 ↔ 小窗」之间切换；
-     * - [ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL]：打开「更多」面板。
+     * - 上滑 → [ModulePreferences.ACTION_PREDICTIVE_BACK_ZOOM]：焦点应用在「全屏 ↔ 小窗」之间切换；
+     * - 下拉 → [ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL]：打开「更多」面板。
      *
      * 判定与广播都在 SystemUI 侧，本进程只认可信发起方（SystemUI / 系统 / 模块自身）。
      */
@@ -173,7 +173,7 @@ internal class ColorOsFreeformCoordinator(
         object : BroadcastReceiver() {
             override fun onReceive(receiverContext: Context?, intent: Intent?) {
                 val action = intent?.action ?: return
-                if (action != ModulePreferences.ACTION_PREDICTIVE_BACK_HOLD &&
+                if (action != ModulePreferences.ACTION_PREDICTIVE_BACK_ZOOM &&
                     action != ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL
                 ) {
                     return
@@ -2056,7 +2056,7 @@ internal class ColorOsFreeformCoordinator(
             context.registerReceiver(
                 predictiveBackReceiver,
                 android.content.IntentFilter().apply {
-                    addAction(ModulePreferences.ACTION_PREDICTIVE_BACK_HOLD)
+                    addAction(ModulePreferences.ACTION_PREDICTIVE_BACK_ZOOM)
                     addAction(ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL)
                 },
                 Context.RECEIVER_EXPORTED,

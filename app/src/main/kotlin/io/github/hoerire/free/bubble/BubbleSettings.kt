@@ -27,6 +27,13 @@ internal data class BubbleSettings(
     val autoDismiss: Boolean,
     /** 到点直接消失（既不贴边收起也不原地变暗）。 */
     val dismissOnTimeout: Boolean = ModulePreferences.DEFAULT_BUBBLE_DISMISS_ON_TIMEOUT,
+    /**
+     * 只通知：气泡从出现起就不接收触摸。
+     *
+     * 生效时到点一律按 [dismissOnTimeout] 处理（见 BubbleCoordinator.timeoutFor）——
+     * 一颗点不掉、拖不走的贴边气泡等于永久残留。
+     */
+    val noticeOnly: Boolean = ModulePreferences.DEFAULT_BUBBLE_NOTICE_ONLY,
     val continuousMotion: Boolean,
     /** 内容卡宽度：auto 时按内容自适应。 */
     val previewAutoWidth: Boolean = true,
@@ -94,6 +101,7 @@ internal data class BubbleSettings(
                 previewDynamicTimeout = ModulePreferences.DEFAULT_BUBBLE_PREVIEW_DYNAMIC_TIMEOUT,
                 autoDismiss = ModulePreferences.DEFAULT_BUBBLE_AUTO_DISMISS,
                 dismissOnTimeout = ModulePreferences.DEFAULT_BUBBLE_DISMISS_ON_TIMEOUT,
+                noticeOnly = ModulePreferences.DEFAULT_BUBBLE_NOTICE_ONLY,
                 continuousMotion = ModulePreferences.DEFAULT_BUBBLE_MOTION_CONTINUOUS,
                 statusScrollEnabled = ModulePreferences.DEFAULT_STATUS_SCROLL_ENABLED,
                 statusScrollActive = false,
@@ -124,6 +132,7 @@ internal data class BubbleSettings(
                 previewDynamicTimeout = snapshot.bubblePreviewDynamicTimeout,
                 autoDismiss = snapshot.bubbleAutoDismiss,
                 dismissOnTimeout = snapshot.bubbleDismissOnTimeout,
+                noticeOnly = snapshot.bubbleNoticeOnly,
                 continuousMotion = snapshot.bubbleMotionContinuous,
                 statusScrollEnabled = snapshot.statusScrollEnabled,
                 statusScrollActive = snapshot.statusScrollActive,

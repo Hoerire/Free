@@ -149,12 +149,9 @@
     <string name="mini_long_press_title">长按静音</string>
     <string name="mini_long_press_summary">长按迷你窗静音，再长按恢复</string>
     <string name="predictive_back_title">返回增强</string>
-    <string name="predictive_back_action_disabled">关闭</string>
-    <string name="predictive_back_action_zoom">小窗</string>
-    <string name="predictive_back_action_panel">更多</string>
-    <string name="predictive_back_desc_off">边缘内滑仍是原厂返回，不做任何接管</string>
-    <string name="predictive_back_desc_zoom">边缘内滑后停住 0.5 秒：全屏变为小窗，小窗变回全屏</string>
-    <string name="predictive_back_desc_panel">边缘内滑后停住 0.5 秒：打开「更多」面板</string>
+    <string name="predictive_back_summary">边缘内滑后上滑切小窗、下拉打开「更多」；不动或滑回去都算取消</string>
+    <string name="predictive_back_swipe_distance_title">滑动距离</string>
+    <string name="predictive_back_swipe_distance_summary">内滑后上滑或下拉超过这个距离才接管；上滑切小窗，下拉打开「更多」</string>
     <string name="float_keep_alive_title">贴边挂机</string>
     <string name="float_keep_alive_summary">收成贴边浮标后保持应用继续运行</string>
     <string name="zoom_group_edge_title">贴边浮标</string>
@@ -163,8 +160,8 @@
     <string name="float_handle_max_summary">同时保留的浮标个数，最多 10 个</string>
     <string name="handle_swipe_up_to_mini_title">快速上滑</string>
     <string name="handle_swipe_up_to_mini_summary">底部横条上滑，切为迷你浮窗</string>
-    <string name="external_handle_title">沉浸式隐藏指示条</string>
-    <string name="external_handle_summary">全面屏手势与小窗的指示条平时隐藏，触摸后重新显示；不占位、不改变布局</string>
+    <string name="external_handle_title">横条沉浸</string>
+    <string name="external_handle_summary">沉浸式隐藏全面屏手势和小窗指示条，触摸恢复显示</string>
 
     <string name="radial_apps_screen_title">扇形应用</string>
     <string name="radial_apps_screen_subtitle">最多添加七项，长按拖动调整顺序；第二组可在上方切换后单独配置</string>
@@ -254,6 +251,8 @@
     <string name="bubble_dim_summary">开启：到点只变暗、留在原位；关闭：到点贴边收起（半隐藏）</string>
     <string name="bubble_dismiss_on_timeout_title">到点自动消失</string>
     <string name="bubble_dismiss_on_timeout_summary">开启后到点直接把气泡收掉，不贴边、不变暗（与「到点变暗留置」二选一）</string>
+    <string name="bubble_notice_only_title">只通知模式</string>
+    <string name="bubble_notice_only_summary">气泡只用来提示：点不动、拖不走，触摸直接穿透到下层应用；到点自行消失</string>
     <string name="bubble_preview_enabled_title">自动展开内容卡</string>
     <string name="bubble_preview_enabled_summary">气泡出现时展开内容卡，停留几秒后自动收回</string>
     <string name="bubble_suppress_banner_title">接管通知横幅</string>
@@ -287,6 +286,7 @@
     <string name="bubble_timeout_dim_kept">变暗留置</string>
     <string name="bubble_timeout_dock">贴边收起</string>
     <string name="bubble_timeout_dismiss">自动消失</string>
+    <string name="bubble_timeout_notice_only">只通知模式</string>
     <string name="bubble_preview_summary_on">开 · %1$s · %2$s</string>
     <string name="bubble_preview_summary_off">关（不展开内容卡）</string>
     <string name="bubble_preview_edge_on">仅贴边</string>

@@ -326,12 +326,13 @@ private fun BubbleOverview(
 
 @Composable
 private fun timingSummary(settings: ModuleSettingsSnapshot): String =
-    if (settings.bubbleAutoDismiss) {
+    if (settings.bubbleAutoDismiss || settings.bubbleNoticeOnly) {
         stringResource(
             R.string.bubble_timing_summary_seconds,
             settings.bubbleTimeoutSeconds,
             stringResource(
                 when {
+                    settings.bubbleNoticeOnly -> R.string.bubble_timeout_notice_only
                     settings.bubbleDismissOnTimeout -> R.string.bubble_timeout_dismiss
                     settings.bubbleDimOnTimeout -> R.string.bubble_timeout_dim_kept
                     else -> R.string.bubble_timeout_dock
@@ -620,6 +621,12 @@ private fun BubbleTimingPage(
 ) {
     val settings = state.settings
     val bubbleEditable = state.settingsEditable && settings.enabled && settings.bubbleEnabled
+    // 停留时长在「只通知」模式下同样生效：该模式到点必定消失，时长是唯一的收场手段。
+    val timeoutEditable =
+        bubbleEditable && (settings.bubbleAutoDismiss || settings.bubbleNoticeOnly)
+    // 变暗留置与贴边收起只在「到点自动收起」且未开启只通知时可配。
+    val endOfStayEditable =
+        bubbleEditable && settings.bubbleAutoDismiss && !settings.bubbleNoticeOnly
     SettingsPage(title = stringResource(R.string.bubble_group_timing), onBack = onBack) {
         item(key = "timing") {
             SettingsGroup(modifier = Modifier.fillMaxWidth()) {
@@ -637,7 +644,7 @@ private fun BubbleTimingPage(
                     icon = Icons.Rounded.Tune,
                     confirmedValue = settings.bubbleTimeoutSeconds,
                     isUpdating = state.isUpdating,
-                    enabled = bubbleEditable && settings.bubbleAutoDismiss,
+                    enabled = timeoutEditable,
                     title = stringResource(R.string.bubble_timeout_title),
                     summary = stringResource(R.string.bubble_timeout_summary),
                     minDp = ModulePreferences.MIN_BUBBLE_TIMEOUT_SECONDS,
@@ -668,7 +675,7 @@ private fun BubbleTimingPage(
                     },
                     title = stringResource(R.string.bubble_dim_title),
                     summary = stringResource(R.string.bubble_dim_summary),
-                    enabled = bubbleEditable && settings.bubbleAutoDismiss,
+                    enabled = endOfStayEditable,
                     startAction = { PreferenceIcon(Icons.Rounded.Layers, bubbleEditable) },
                 )
                 SwitchPreference(
@@ -684,8 +691,20 @@ private fun BubbleTimingPage(
                     },
                     title = stringResource(R.string.bubble_dismiss_on_timeout_title),
                     summary = stringResource(R.string.bubble_dismiss_on_timeout_summary),
-                    enabled = bubbleEditable && settings.bubbleAutoDismiss,
+                    enabled = endOfStayEditable,
                     startAction = { PreferenceIcon(Icons.Rounded.Block, bubbleEditable) },
+                )
+                // 只通知：气泡不接收触摸，点按与拖动直接穿透到下层应用。
+                // 与上面三项各自独立——开启后到点一律直接消失，另两种到点处理不再参与。
+                SwitchPreference(
+                    checked = settings.bubbleNoticeOnly,
+                    onCheckedChange = { value ->
+                        onSettingsChange { it.copy(bubbleNoticeOnly = value) }
+                    },
+                    title = stringResource(R.string.bubble_notice_only_title),
+                    summary = stringResource(R.string.bubble_notice_only_summary),
+                    enabled = bubbleEditable,
+                    startAction = { PreferenceIcon(Icons.Rounded.Notifications, bubbleEditable) },
                 )
             }
         }

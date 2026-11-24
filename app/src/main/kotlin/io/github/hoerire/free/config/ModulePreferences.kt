@@ -70,7 +70,7 @@ internal object ModulePreferences {
     const val KEY_HANDLE_SWIPE_UP_TO_MINI_ENABLED = "handle_swipe_up_to_mini_enabled"
 
     /**
-     * 沉浸式隐藏指示条：小窗的底部横条与顶部三点、以及全面屏手势指示条，
+     * 横条沉浸：小窗的底部横条与顶部三点、以及全面屏手势指示条，
      * 平时隐藏、触摸后重新显示（不占位、应用不下沉）。
      *
      * 与其他手势项一致，只受模块总开关约束。默认关闭：关掉后系统显隐完全按原厂处理。
@@ -139,32 +139,43 @@ internal object ModulePreferences {
     const val DEFAULT_LONG_PRESS_MUTE = false
 
     /**
-     * 返回增强：屏幕边缘内滑开始返回手势后不松手，超过 0.5 秒执行所选动作。
-     * 松手才返回是系统原本的行为：0.5 秒内松手仍按原厂返回处理。
+     * 返回增强：边缘内滑开始返回手势后，手指**上滑或下拉**超过设定距离执行对应动作。
      *
-     * 取值 [PREDICTIVE_BACK_ACTION_DISABLED] / [PREDICTIVE_BACK_ACTION_ZOOM] /
-     * [PREDICTIVE_BACK_ACTION_MORE_PANEL]；默认关闭，避免升级后行为突变。
+     * 方向即动作：上滑把焦点应用在「全屏 ↔ 小窗」之间切换，下拉打开「更多」面板。
+     * 判据是方向 + 距离，没有时长：手指停多久都不会触发，停住期间滑回去就等于取消。
+     *
+     * 默认关闭，避免升级后行为突变。
      */
-    const val KEY_PREDICTIVE_BACK_ACTION = "predictive_back_action_v1"
-    const val PREDICTIVE_BACK_ACTION_DISABLED = -1
-    const val PREDICTIVE_BACK_ACTION_ZOOM = 0
-    const val PREDICTIVE_BACK_ACTION_MORE_PANEL = 1
-    const val DEFAULT_PREDICTIVE_BACK_ACTION = PREDICTIVE_BACK_ACTION_DISABLED
+    const val KEY_PREDICTIVE_BACK_ENABLED = "predictive_back_enabled_v1"
+    const val DEFAULT_PREDICTIVE_BACK_ENABLED = false
 
-    fun coercePredictiveBackAction(value: Int): Int = value.coerceIn(-1, 1)
+    /** 按时长/三选一动作时代的旧键：只用于读取迁移与清除残留。 */
+    const val LEGACY_KEY_PREDICTIVE_BACK_ACTION = "predictive_back_action_v1"
+    const val LEGACY_KEY_PREDICTIVE_BACK_HOLD_MS = "predictive_back_hold_ms_v1"
+    const val LEGACY_PREDICTIVE_BACK_ACTION_DISABLED = -1
 
     /**
-     * 返回增强保持多久后接管（毫秒）。
+     * 触发用的滑动距离（dp）：边缘内滑后上滑或下拉超过这个距离才执行动作。
      *
-     * 0.5 秒足够区分「快速滑一下返回」和「滑进来停住」，又不至于让用户觉得要等。
+     * 默认 100dp：实测比 56dp 更容易判准，手指不必刻意拉很短；下限 16dp 保证还能和抖动分开，
+     * 上限 200dp 让手上留有余量而不至于要拉满半屏。
      */
-    const val PREDICTIVE_BACK_HOLD_MS = 500L
+    const val KEY_PREDICTIVE_BACK_SWIPE_DISTANCE_DP = "predictive_back_swipe_distance_dp_v1"
+    const val DEFAULT_PREDICTIVE_BACK_SWIPE_DISTANCE_DP = 100
+    const val MIN_PREDICTIVE_BACK_SWIPE_DISTANCE_DP = 16
+    const val MAX_PREDICTIVE_BACK_SWIPE_DISTANCE_DP = 200
 
-    /** 停住后原地变小窗：由 SystemUI 在松手前发出，system_server 收到后切换窗口形态。 */
-    const val ACTION_PREDICTIVE_BACK_HOLD =
-        "io.github.hoerire.free.action.PREDICTIVE_BACK_HOLD"
+    fun coercePredictiveBackSwipeDistanceDp(value: Int): Int =
+        value.coerceIn(
+            MIN_PREDICTIVE_BACK_SWIPE_DISTANCE_DP,
+            MAX_PREDICTIVE_BACK_SWIPE_DISTANCE_DP,
+        )
 
-    /** 停住后打开「更多」面板。 */
+    /** 上滑：焦点应用在「全屏 ↔ 小窗」之间切换，由 SystemUI 在松手前发出。 */
+    const val ACTION_PREDICTIVE_BACK_ZOOM =
+        "io.github.hoerire.free.action.PREDICTIVE_BACK_ZOOM"
+
+    /** 下拉：打开「更多」面板。 */
     const val ACTION_PREDICTIVE_BACK_MORE_PANEL =
         "io.github.hoerire.free.action.PREDICTIVE_BACK_MORE_PANEL"
 
@@ -278,6 +289,13 @@ internal object ModulePreferences {
     const val KEY_BUBBLE_AUTO_DISMISS = "bubble_auto_dismiss_v1"
     /** 到点行为：true = 直接消失（不贴边、不变暗）。 */
     const val KEY_BUBBLE_DISMISS_ON_TIMEOUT = "bubble_dismiss_on_timeout_v1"
+    /**
+     * 只通知：气泡从出现起就不接收触摸，点按与拖动直接穿透到下层应用。
+     *
+     * 与三种到点行为互相独立——开启后气泡到点一律直接消失（见 BubbleCoordinator.timeoutFor），
+     * 因为一颗点不掉、拖不走的残留气泡若还贴着边，就再也收不回去了。
+     */
+    const val KEY_BUBBLE_NOTICE_ONLY = "bubble_notice_only_v1"
     const val KEY_BUBBLE_MOTION_CONTINUOUS = "bubble_motion_continuous_v1"
 
     /** 状态栏滚动开关：气泡总闸之下的子开关，可以只滚不出气泡。 */
@@ -359,6 +377,7 @@ internal object ModulePreferences {
     const val DEFAULT_BUBBLE_PREVIEW_DYNAMIC_TIMEOUT = true
     const val DEFAULT_BUBBLE_AUTO_DISMISS = true
     const val DEFAULT_BUBBLE_DISMISS_ON_TIMEOUT = false
+    const val DEFAULT_BUBBLE_NOTICE_ONLY = false
     const val DEFAULT_BUBBLE_MOTION_CONTINUOUS = true
     const val DEFAULT_STATUS_SCROLL_ENABLED = false
     const val DEFAULT_STATUS_SCROLL_ROUNDS = 1

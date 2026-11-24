@@ -214,11 +214,16 @@ internal class FrameworkConnectionRepository(private val context: Context) {
     fun setLongPressMute(enabled: Boolean) =
         updateSettings { it.copy(longPressMuteEnabled = enabled) }
 
-    /** 返回增强：边缘内滑不松手超过 0.5 秒后执行的动作（关闭 / 原地小窗 / 更多面板）。 */
-    fun setPredictiveBackAction(action: Int) =
+    /** 返回增强：边缘内滑后上滑切小窗、下拉打开更多。 */
+    fun setPredictiveBackEnabled(enabled: Boolean) =
+        updateSettings { it.copy(predictiveBackEnabled = enabled) }
+
+    /** 返回增强的触发距离（dp）：内滑后上滑或下拉超过该距离才接管。 */
+    fun setPredictiveBackSwipeDistanceDp(dp: Int) =
         updateSettings {
             it.copy(
-                predictiveBackAction = ModulePreferences.coercePredictiveBackAction(action),
+                predictiveBackSwipeDistanceDp =
+                    ModulePreferences.coercePredictiveBackSwipeDistanceDp(dp),
             )
         }
 

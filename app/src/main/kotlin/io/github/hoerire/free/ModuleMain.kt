@@ -89,7 +89,7 @@ class ModuleMain : XposedModule() {
                     "_scnClip" + settings.zoomLaunchClipboard +
                     "_scnAc" + settings.autoCloseWindow +
                     "_scnSu" + settings.handleSwipeUpToMiniEnabled +
-                    // 沉浸式隐藏指示条：小窗横条与三点、手势指示条，排查时先看这一位是否随设置变化。
+                    // 横条沉浸：小窗横条与三点、手势指示条，排查时先看这一位是否随设置变化。
                     "_exth" + settings.externalHandleEnabled +
                     // 底角手势总闸：关掉后抢流/防穿透/桌面接管都不参与，排查时先看这一位。
                     "_radial" + settings.cornerInteractionActive +

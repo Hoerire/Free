@@ -22,12 +22,15 @@ internal class BubbleWindowHost(private val logger: (code: String, throwable: Th
         timeoutSeconds: Int,
         dimOnTimeout: Boolean,
         dismissOnTimeout: Boolean,
+        noticeOnly: Boolean,
     ): Boolean {
         if (bubbleView != null && bubbleView !== view) {
             runCatching { bubbleView?.dismiss() }
         }
         val shown =
-            runCatching { view.show(timeoutSeconds, dimOnTimeout, dismissOnTimeout) }.getOrElse {
+            runCatching {
+                view.show(timeoutSeconds, dimOnTimeout, dismissOnTimeout, noticeOnly)
+            }.getOrElse {
                 logger("BUBBLE_WINDOW_ADD_FAILED", it)
                 false
             }

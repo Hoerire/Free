@@ -3,8 +3,6 @@ package io.github.hoerire.free.hook
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
-import android.os.Handler
-import android.os.Looper
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import io.github.hoerire.free.config.ModulePreferences
@@ -12,28 +10,29 @@ import io.github.hoerire.free.log.ModuleLog
 import java.lang.reflect.Method
 
 /**
- * 返回增强：边缘内滑后不松手，超过 0.5 秒执行设置里选定的那一项
- * ——「小窗」（全屏 ↔ 小窗切换）或「更多」（打开更多面板），也可以整个关掉。
+ * 返回增强：边缘内滑开始返回手势后，手指**上滑或下拉**超过设定距离执行对应动作。
+ *
+ * 方向即动作：上滑把焦点应用在「全屏 ↔ 小窗」之间切换，下拉打开「更多」面板。
  *
  * 原厂行为是「松手才返回」：手势过程中只是预览，`ACTION_UP` 才真正提交返回。
  * 这里接在返回增强手势的入口 `BackAnimationController.onMotionEvent(x, y, action, index,
- * displayId)` 上，只观察、不改写前 0.5 秒的任何事件——快滑松手走的是原厂路径，行为完全不变。
+ * displayId)` 上，只观察、不改写任何事件——没滑够距离就松手时走的是原厂路径，行为完全不变。
  *
- * 计时到期时做两件事：
+ * 判据是**方向 + 距离**而不是停留时长：手指在屏幕上停多久都不会触发，停住期间把手指滑回
+ * 原位或直接松手都等于取消这次返回。按时间触发做不到这一点——时间一到就必须执行，
+ * 想反悔已经晚了。
+ *
+ * 滑够距离时做两件事：
  *   1. 给 system_server 发一条广播，由它执行动作（小窗切换 / 打开面板，链路与扇形菜单一致）；
  *   2. 立刻向控制器注入一次 `ACTION_CANCEL`，结束这次返回手势，之后松手不会再返回。
- *
- * 判断依据只有时间：手势开始后 0.5 秒内松手 = 原厂返回；不松手 = 执行所选动作。
  */
 @SuppressLint("PrivateApi")
-internal class PredictiveBackHoldHook(
+internal class PredictiveBackSwipeHook(
     private val module: XposedModule,
     private val configuration: ProcessConfiguration,
     private val context: Context,
 ) {
-    private val handler = Handler(Looper.getMainLooper())
-
-    /** 本次手势是否在计时。 */
+    /** 本次手势是否在跟踪（返回增强已开启且起手落在生效边缘）。 */
     @Volatile private var armed = false
 
     /** 本次手势是否已经触发过动作：触发后到松手之间的事件全部吞掉。 */
@@ -56,8 +55,7 @@ internal class PredictiveBackHoldHook(
     private var leftEdge = true
 
     private val screenWidth = context.resources.displayMetrics.widthPixels.toFloat()
-
-    private val timeout = Runnable { fire() }
+    private val density = context.resources.displayMetrics.density
 
     fun install(classLoader: ClassLoader) {
         try {
@@ -74,29 +72,33 @@ internal class PredictiveBackHoldHook(
             module
                 .hook(method)
                 .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
-                .setId("free.systemui.predictive_back_hold")
+                .setId("free.systemui.predictive_back_swipe")
                 .intercept { chain ->
                     if (injecting) return@intercept chain.proceed()
                     val action = (chain.getArg(2) as? Number)?.toInt() ?: -1
                     when (action) {
                         ACTION_DOWN -> onDown(chain)
-                        ACTION_MOVE -> if (fired) return@intercept null
+                        ACTION_MOVE -> {
+                            // 触发之后手势已经结束，后续移动不再交给原厂。
+                            if (fired) return@intercept null
+                            onMove(chain)
+                        }
                         ACTION_UP, ACTION_CANCEL -> {
-                            cancelTimer()
                             if (fired) {
-                                // 手势已经结束，剩下的抬手事件不再交给原厂。
+                                // 触发后松手：抬手事件不再交给原厂，否则会提交一次返回。
                                 resetGesture()
                                 return@intercept null
                             }
+                            resetGesture()
                         }
                     }
                     chain.proceed()
                 }
-            ModuleLog.info("PREDICTIVE_BACK_HOLD_HOOK_INSTALLED")
+            ModuleLog.info("PREDICTIVE_BACK_HOOK_INSTALLED")
         } catch (exception: ReflectiveOperationException) {
-            ModuleLog.warn("PREDICTIVE_BACK_HOLD_TARGET_UNAVAILABLE", exception)
+            ModuleLog.warn("PREDICTIVE_BACK_TARGET_UNAVAILABLE", exception)
         } catch (exception: LinkageError) {
-            ModuleLog.warn("PREDICTIVE_BACK_HOLD_TARGET_LINKAGE_FAILED", exception)
+            ModuleLog.warn("PREDICTIVE_BACK_TARGET_LINKAGE_FAILED", exception)
         }
     }
 
@@ -111,34 +113,57 @@ internal class PredictiveBackHoldHook(
         lastIndex = (chain.getArg(3) as? Number)?.toInt() ?: 0
         lastDisplay = (chain.getArg(4) as? Number)?.toInt() ?: 0
         leftEdge = downX < screenWidth / 2f
-        val action = configuration.snapshot.predictiveBackActionEffective
-        if (action == ModulePreferences.PREDICTIVE_BACK_ACTION_DISABLED) return
+        if (!configuration.snapshot.predictiveBackEffective) return
         armed = true
-        handler.postDelayed(timeout, ModulePreferences.PREDICTIVE_BACK_HOLD_MS)
-        ModuleLog.debug("Free") { "PREDICTIVE_BACK_HOLD_ARMED_" + action }
+        ModuleLog.debug("Free") { "PREDICTIVE_BACK_ARMED" }
     }
 
-    /** 计时到期：通知 system_server 执行动作，并结束这次返回手势。 */
-    private fun fire() {
+    /**
+     * 跟踪手指：上滑或下拉超过设定距离就触发，其余情况一律放行。
+     *
+     * 只看纵向位移，不看时间：停住不动永远不会触发，滑回原位也不会；
+     * 阈值每次现场取，设置页改完不用重装钩子。
+     */
+    private fun onMove(chain: XposedInterface.Chain) {
+        val x = (chain.getArg(0) as? Number)?.toFloat() ?: return
+        val y = (chain.getArg(1) as? Number)?.toFloat() ?: return
+        lastX = x
+        lastY = y
+        if (fired) return
+        if (!armed) return
+        val threshold = configuration.snapshot.predictiveBackSwipeDistanceDpEffective * density
+        val delta = y - downY
+        when {
+            // 上滑：y 变小，切窗口形态。
+            delta <= -threshold -> fire(ModulePreferences.ACTION_PREDICTIVE_BACK_ZOOM)
+            // 下拉：y 变大，打开「更多」面板。
+            delta >= threshold -> fire(ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL)
+        }
+    }
+
+    /** 滑够距离：通知 system_server 执行动作，并结束这次返回手势。 */
+    private fun fire(action: String) {
         if (!armed || fired) return
-        val action = configuration.snapshot.predictiveBackActionEffective
-        if (action == ModulePreferences.PREDICTIVE_BACK_ACTION_DISABLED) {
+        if (!configuration.snapshot.predictiveBackEffective) {
             armed = false
             return
         }
         fired = true
         armed = false
-        if (action == ModulePreferences.PREDICTIVE_BACK_ACTION_MORE_PANEL) {
-            sendBroadcast(ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL) { intent ->
+        sendBroadcast(action) { intent ->
+            if (action == ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL) {
                 intent.putExtra(ModulePreferences.EXTRA_GESTURE_SIDE, leftEdge)
                 intent.putExtra(ModulePreferences.EXTRA_GESTURE_X, downX)
                 intent.putExtra(ModulePreferences.EXTRA_GESTURE_Y, downY)
             }
-            ModuleLog.info("PREDICTIVE_BACK_MORE_PANEL")
-        } else {
-            sendBroadcast(ModulePreferences.ACTION_PREDICTIVE_BACK_HOLD)
-            ModuleLog.info("PREDICTIVE_BACK_HOLD_FIRED")
         }
+        ModuleLog.info(
+            if (action == ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL) {
+                "PREDICTIVE_BACK_MORE_PANEL"
+            } else {
+                "PREDICTIVE_BACK_ZOOM"
+            },
+        )
         injectCancel()
     }
 
@@ -175,23 +200,18 @@ internal class PredictiveBackHoldHook(
         injecting = true
         try {
             method.invoke(target, lastX, lastY, ACTION_CANCEL, lastIndex, lastDisplay)
-            ModuleLog.debug("Free") { "PREDICTIVE_BACK_HOLD_CANCEL_INJECTED" }
+            ModuleLog.debug("Free") { "PREDICTIVE_BACK_CANCEL_INJECTED" }
         } catch (exception: ReflectiveOperationException) {
-            ModuleLog.warn("PREDICTIVE_BACK_HOLD_CANCEL_FAILED", exception)
+            ModuleLog.warn("PREDICTIVE_BACK_CANCEL_FAILED", exception)
         } catch (exception: RuntimeException) {
-            ModuleLog.warn("PREDICTIVE_BACK_HOLD_CANCEL_FAILED", exception)
+            ModuleLog.warn("PREDICTIVE_BACK_CANCEL_FAILED", exception)
         } finally {
             injecting = false
         }
     }
 
-    private fun cancelTimer() {
-        armed = false
-        handler.removeCallbacks(timeout)
-    }
-
     private fun resetGesture() {
-        cancelTimer()
+        armed = false
         fired = false
     }
 
