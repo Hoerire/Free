@@ -945,10 +945,14 @@ internal class ColorOsFreeformCoordinator(
     }
 
     /**
-     * 把最近任务包名推给侧边栏进程（「更多」面板的「最近」分组在那里拼）。
+     * 把最近任务推给侧边栏进程（「更多」面板的「最近」分组在那里拼）。
      *
      * ColorOS 不把游戏写进 UsageStats，侧边栏只能看到「用过但不含游戏」的那一份；
      * system_server 这边 `getRecentTasks` 是完整的，用它补上游戏。
+     *
+     * 分身（u998 / u999）与主应用**包名相同**，只推包名会在侧边栏合并时并成一条，
+     * 分身就永远进不了「最近」。所以这里带上任务的 userId：主用户推 `包名`，
+     * 其他用户推 `包名#userId`。
      */
     private fun syncRecentsToSidebar() {
         val manager = runCatching { context.getSystemService(android.app.ActivityManager::class.java) }.getOrNull() ?: return
@@ -956,8 +960,19 @@ internal class ColorOsFreeformCoordinator(
             runCatching {
                 @Suppress("DEPRECATION")
                 manager.getRecentTasks(RECENT_TASKS_LIMIT, android.app.ActivityManager.RECENT_WITH_EXCLUDED)
-                    .mapNotNull { task -> task.baseIntent?.component?.packageName ?: task.origActivity?.packageName }
-                    .filterNot { pkg -> pkg == ModulePreferences.SIDEBAR_PACKAGE || pkg == context.packageName }
+                    .mapNotNull { task ->
+                        val pkg = task.baseIntent?.component?.packageName
+                            ?: task.origActivity?.packageName
+                            ?: return@mapNotNull null
+                        if (pkg == ModulePreferences.SIDEBAR_PACKAGE || pkg == context.packageName) {
+                            return@mapNotNull null
+                        }
+                        // userId 是 TaskInfo 的公开字段（API 29+），取不到按主用户处理。
+                        val userId = runCatching {
+                            task.javaClass.getField("userId").getInt(task)
+                        }.getOrDefault(0)
+                        if (userId > 0) "$pkg#$userId" else pkg
+                    }
                     .distinct()
             }.getOrDefault(emptyList())
         if (packages.isEmpty()) return

@@ -15,11 +15,14 @@ internal object ModulePreferences {
     const val EXTRA_SKIP_ZOOM = "io.github.hoerire.free.extra.SKIP_ZOOM"
 
     /**
-     * system_server → 侧边栏进程：最近任务包名（新的在前）。
+     * system_server → 侧边栏进程：最近任务（新的在前）。
      *
      * 侧边栏进程是普通应用 uid，拿不到 `getRecentTasks`；而 ColorOS 不把游戏写进
      * UsageStats（王者荣耀 7 天内 0 条 ACTIVITY_RESUMED），「最近」分组就会漏掉它。
      * 由 system_server 把最近任务顺序推过去，侧边栏只做合并。
+     *
+     * 每项是 `包名` 或 `包名#userId`：分身（u998/u999）与主应用包名相同，
+     * 只用包名会在去重时并成一条，分身就再也进不了「最近」。
      */
     const val ACTION_RECENTS_SYNC = "io.github.hoerire.free.action.RECENTS_SYNC"
     const val EXTRA_RECENT_PACKAGES = "recent_packages"

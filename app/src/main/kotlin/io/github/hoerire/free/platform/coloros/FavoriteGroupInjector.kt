@@ -413,6 +413,9 @@ internal object FavoriteGroupInjector {
     /**
      * 「最近打开的应用」：侧边栏本身就是按「使用情况访问权限」统计的，
      * 这里直接用同一个 UsageStatsManager 查，按最后使用时间倒序，再映射成面板条目。
+     *
+     * 分身（u998 / u999）与主应用**包名相同**：UsageStats 的事件只带包名，分身在这一步
+     * 就会和主应用合并。因此分身只能靠 system_server 推送的那一份（带 userId）补齐。
      */
     private fun recentItems(
         loader: ClassLoader,
@@ -429,21 +432,26 @@ internal object FavoriteGroupInjector {
         }
         val end = System.currentTimeMillis()
         // 用「切到前台」事件排真实先后；queryUsageStats 的 lastTimeUsed 是按桶聚合的，排序会变成近似字母序。
-        val ordered = LinkedHashSet<String>()
-        // 先放 system_server 推来的最近任务：ColorOS 不把游戏写进 UsageStats，靠它补。
-        ordered.addAll(sidebarRecents)
+        // 键是 `包名#userId`：主用户 0，分身是自己的 userId，不能并成一条。
+        val ordered = LinkedHashMap<String, RecentRef>()
+        // 先放 system_server 推来的最近任务：ColorOS 不把游戏写进 UsageStats，靠它补；
+        // 分身也只有这条路带得上 userId。
+        sidebarRecents.forEach { raw ->
+            parseRecentRef(raw)?.let { ordered.putIfAbsent(it.key, it) }
+        }
         try {
             val events = manager.queryEvents(end - RECENT_WINDOW_MS, end)
             val event = android.app.usage.UsageEvents.Event()
-            val hits = ArrayList<Pair<Long, String>>()
+            val hits = ArrayList<Pair<Long, RecentRef>>()
             while (events.hasNextEvent()) {
                 events.getNextEvent(event)
                 if (event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND) {
-                    hits.add(event.timeStamp to event.packageName)
+                    val pkg = event.packageName ?: continue
+                    hits.add(event.timeStamp to RecentRef(pkg, 0, null))
                 }
             }
             hits.sortByDescending { it.first }
-            hits.forEach { ordered.add(it.second) }
+            hits.forEach { (_, ref) -> ordered.putIfAbsent(ref.key, ref) }
         } catch (t: Throwable) {
             d(t) { "recent: queryEvents fail" }
         }
@@ -461,22 +469,141 @@ internal object FavoriteGroupInjector {
             stats.asSequence()
                 .filter { it.lastTimeUsed > 0 && it.totalTimeInForeground > 0 }
                 .sortedByDescending { it.lastTimeUsed }
-                .forEach { ordered.add(it.packageName) }
+                .forEach { stat ->
+                    val ref = RecentRef(stat.packageName, 0, null)
+                    ordered.putIfAbsent(ref.key, ref)
+                }
         }
-        ordered.remove("com.coloros.smartsidebar")
-        ordered.remove("android")
-        d { "usage pkgs=" + ordered.size + " " + ordered.take(12) }
+        ordered.remove("com.coloros.smartsidebar#0")
+        ordered.remove("android#0")
+        d { "usage pkgs=" + ordered.size + " " + ordered.keys.take(12) }
         val self = context.packageName
-        val picked = ordered.asSequence()
-            .filterNot { it == self }
-            .mapNotNull { pkg ->
-                val activity = activityOf(context, pkg) ?: return@mapNotNull null
-                buildAliasItem(loader, context, pkg + "#" + activity)
-            }
+        val picked = ordered.values.asSequence()
+            .filterNot { it.packageName == self }
+            .mapNotNull { ref -> buildRecentItem(loader, context, ref) }
             .toList()
+            // 分身与主应用的 alias 必须不同：分身的 alias 是 `包名#userId`，主应用是 `包名#activity`。
             .distinctBy { aliasOf(it) }
         d { "recent built=" + picked.size + " " + picked.mapNotNull { aliasOf(it) }.take(12) }
         return picked
+    }
+
+    /** 一条「最近」引用：主用户 `包名`，分身 `包名#userId`（可带 activity 提示）。 */
+    private data class RecentRef(
+        val packageName: String,
+        val userId: Int,
+        val activity: String?,
+    ) {
+        val key: String get() = "$packageName#$userId"
+    }
+
+    /**
+     * 解析 system_server 推来的条目。
+     *
+     * 三种形态：`包名`（主用户）、`包名#userId`（分身，activity 自己解析）、
+     * `包名#userId#activity`（分身，activity 由推送方给出）。
+     */
+    private fun parseRecentRef(raw: String): RecentRef? {
+        val parts = raw.split('#')
+        val pkg = parts.firstOrNull()?.takeIf { it.isNotEmpty() } ?: return null
+        if (parts.size >= 2) {
+            val userId = parts[1].toIntOrNull()
+            if (userId != null && userId > 0) {
+                return RecentRef(pkg, userId, parts.getOrNull(2)?.takeIf { it.isNotEmpty() })
+            }
+        }
+        return RecentRef(pkg, 0, null)
+    }
+
+    private fun buildRecentItem(
+        loader: ClassLoader,
+        context: android.content.Context,
+        ref: RecentRef,
+    ): Any? {
+        if (ref.userId > 0) return buildCloneItem(loader, context, ref)
+        val activity = activityOf(context, ref.packageName) ?: return null
+        return buildAliasItem(loader, context, ref.packageName + "#" + activity)
+    }
+
+    /**
+     * 分身条目：必须带上 `mutiUserId`，否则点下去会落回主应用。
+     *
+     * 优先让系统的 `LauncherAppProxy` 现造 bean：那正是侧边栏「全部应用」里分身条目
+     * 的来源（`createAndAddEntryBeanForFirstInit(pkg, activity, mutiUserId)`），
+     * 别名、缓存与点击路由都与原生一致。反射失败时才自己拼 EntryBean。
+     */
+    private fun buildCloneItem(
+        loader: ClassLoader,
+        context: android.content.Context,
+        ref: RecentRef,
+    ): Any? {
+        val activity = ref.activity
+            ?: cloneActivityOf(context, ref.packageName, ref.userId)
+            ?: return null
+        nativeCloneBean(loader, ref.packageName, activity, ref.userId)?.let { return it }
+        return buildAppItem(loader, context, ref.packageName, activity, ref.userId)
+    }
+
+    /** 分身用户里该包的启动入口；拿不到返回 null。 */
+    private fun cloneActivityOf(
+        context: android.content.Context,
+        pkg: String,
+        userId: Int,
+    ): String? = try {
+        val user = android.os.UserHandle.getUserHandleForUid(userId * PER_USER_RANGE)
+        val launcherApps = context.getSystemService(android.content.pm.LauncherApps::class.java)
+        // 取第一个入口即可：分身与主应用组件名通常一致，点击路由按 mutiUserId 分用户。
+        launcherApps
+            ?.getActivityList(pkg, user)
+            ?.firstOrNull()
+            ?.componentName
+            ?.className
+    } catch (_: Throwable) {
+        null
+    }
+
+    /** 让侧边栏自己的 `LauncherAppProxy` 产出分身 bean（与原生「全部应用」里的完全一致）。 */
+    private fun nativeCloneBean(
+        loader: ClassLoader,
+        pkg: String,
+        activity: String,
+        userId: Int,
+    ): Any? = try {
+        val proxyClass = Class.forName(
+            "com.oplus.smartsidebar.panelview.edgepanel.data.entrybeans.proxies.LauncherAppProxy",
+            false,
+            loader,
+        )
+        val proxy = proxyClass.getField("INSTANCE").get(null)
+        runCatching {
+            proxyClass.getMethod("loadAllAppIfNeed").invoke(proxy)
+        }
+        val bean =
+            runCatching {
+                proxyClass
+                    .getMethod(
+                        "findAppEntryBeanFromCache",
+                        String::class.java,
+                        String::class.java,
+                        Int::class.javaPrimitiveType,
+                    )
+                    .invoke(proxy, pkg, activity, userId)
+            }.getOrNull()
+                ?: runCatching {
+                    proxyClass
+                        .getMethod(
+                            "createAndAddEntryBeanForFirstInit",
+                            String::class.java,
+                            String::class.java,
+                            Int::class.javaPrimitiveType,
+                        )
+                        .invoke(proxy, pkg, activity, userId)
+                }.getOrNull()
+                ?: return null
+        wrapAppLabelData(loader, bean)
+    } catch (t: Throwable) {
+        d(t) { "nativeCloneBean fail " + pkg }
+        null
     }
 
     /** 应用显示名。 */
@@ -505,12 +632,18 @@ internal object FavoriteGroupInjector {
         return buildAppItem(loader, context, pkg, activity)
     }
 
-    /** 造一个应用条目：EntryBean(alias, pkg, activity, type=2, mutiUserId=0) → AppLabelData。 */
+    /**
+     * 造一个应用条目：EntryBean(alias, pkg, activity, type=2, mutiUserId) → AppLabelData。
+     *
+     * `mutiUserId` 必须写对：0 是主用户，分身要写自己的 userId，否则点击会落回主应用。
+     * 分身的 alias 与模块其它地方一致，用 `包名#userId`（见 [PinnedTarget.Sidebar]）。
+     */
     private fun buildAppItem(
         loader: ClassLoader,
         context: android.content.Context?,
         pkg: String,
         activity: String,
+        userId: Int = 0,
     ): Any? = try {
         val beanCls = Class.forName(
             "com.oplus.smartsidebar.panelview.edgepanel.data.entrybeans.models.beans.EntryBean",
@@ -527,7 +660,8 @@ internal object FavoriteGroupInjector {
                 it.parameterTypes[4] == Int::class.javaPrimitiveType
         }?.apply { isAccessible = true }
             ?: throw NoSuchMethodException("EntryBean 5 参构造未找到")
-        val bean = ctor.newInstance(pkg + "#" + activity, pkg, activity, 2, 0)
+        val alias = if (userId > 0) pkg + "#" + userId else pkg + "#" + activity
+        val bean = ctor.newInstance(alias, pkg, activity, 2, userId)
         // 面板标签取自 ItemBean.mLabel；构造出的 bean 不含该字段，仅显示图标而无名称。
         val label = labelOf(context, pkg)
         if (!label.isNullOrEmpty()) {
@@ -542,12 +676,21 @@ internal object FavoriteGroupInjector {
                 cls = cls.superclass
             }
         }
+        // 分身图标由系统画角标，主用户不画。侧边栏按 isCloned/mutiUserId 判断，构造时已带上。
+        wrapAppLabelData(loader, bean)
+    } catch (t: Throwable) {
+        d(t) { "buildAppItem fail " + pkg }
+        null
+    }
+
+    /** 把 EntryBean 包成面板认识的 AppLabelData。 */
+    private fun wrapAppLabelData(loader: ClassLoader, bean: Any): Any? = try {
         val ald = Class.forName("com.oplus.smartsidebar.panelview.edgepanel.data.AppLabelData", false, loader)
         ald.constructors
             .firstOrNull { it.parameterCount == 1 && it.parameterTypes[0].isInstance(bean) }
             ?.newInstance(bean)
     } catch (t: Throwable) {
-        d(t) { "buildAppItem fail " + pkg }
+        d(t) { "wrapAppLabelData fail" }
         null
     }
 
@@ -644,4 +787,7 @@ internal object FavoriteGroupInjector {
 
     private fun attr(attrs: String, name: String): String? =
         Regex(name + "=\"([^\"]*)\"").find(attrs)?.groupValues?.getOrNull(1)
+
+    /** Android 每个用户占用的 uid 区间：`uid / 100000` 即 userId。 */
+    private const val PER_USER_RANGE = 100_000
 }
