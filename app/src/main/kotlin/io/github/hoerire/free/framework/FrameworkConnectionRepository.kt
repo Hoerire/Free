@@ -130,6 +130,14 @@ internal class FrameworkConnectionRepository(private val context: Context) {
     fun setRadialInteractionEnabled(enabled: Boolean) =
         updateSettings { it.copy(radialInteractionEnabled = enabled) }
 
+    /** 解除限制：改写系统长按拖拽的准入名单。 */
+    fun setDragUnlockEnabled(enabled: Boolean) =
+        updateSettings { it.copy(dragUnlockEnabled = enabled) }
+
+    /** 小窗交互总开关：关闭后整组小窗改写退出，把这条链路让给系统或其它模块。 */
+    fun setZoomInteractionEnabled(enabled: Boolean) =
+        updateSettings { it.copy(zoomInteractionEnabled = enabled) }
+
     /** 流光特效：选中项外沿的动效，与「选中光圈」互相独立。 */
     fun setRadialShimmerEnabled(enabled: Boolean) =
         updateSettings { it.copy(radialShimmerEnabled = enabled) }
@@ -148,21 +156,19 @@ internal class FrameworkConnectionRepository(private val context: Context) {
             it.copy(radialRadiusPercent = ModulePreferences.coerceRadialRadiusPercent(value))
         }
 
-    /** 解除限制：改写系统长按拖拽的准入名单。 */
-    fun setFreeDragEnabled(enabled: Boolean) =
-        updateSettings { it.copy(freeDragEnabled = enabled) }
+    /** 滚动通知：最新通知在状态栏时钟位置滚动显示，与气泡总闸互不依赖。 */
+    fun setStatusScrollEnabled(enabled: Boolean) =
+        updateSettings { it.copy(statusScrollEnabled = enabled) }
 
-    /** 快速分享：拖拽时弹出模块自绘的分享面板。 */
-    fun setQuickShareEnabled(enabled: Boolean) =
-        updateSettings { it.copy(quickShareEnabled = enabled) }
+    fun setStatusScrollRounds(rounds: Int) =
+        updateSettings {
+            it.copy(statusScrollRounds = ModulePreferences.coerceStatusScrollRounds(rounds))
+        }
 
-    /** 是否允许调整触发延迟：关闭时系统长按阈值保持原厂 400ms。 */
-    fun setDragLongPressEnabled(enabled: Boolean) =
-        updateSettings { it.copy(dragLongPressEnabled = enabled) }
-
-    /** 拖拽触发延迟（毫秒）：写回配置，由 system_server 应用到系统长按阈值。 */
-    fun setDragLongPressMs(ms: Int) =
-        updateSettings { it.copy(dragLongPressMs = ModulePreferences.coerceDragLongPressMs(ms)) }
+    fun setStatusScrollSpeed(speed: Int) =
+        updateSettings {
+            it.copy(statusScrollSpeed = ModulePreferences.coerceStatusScrollSpeed(speed))
+        }
 
     /**
      * 气泡设置：整页只提交「下一个快照」，具体字段由页面决定。
@@ -349,7 +355,6 @@ internal class FrameworkConnectionRepository(private val context: Context) {
             "com.android.launcher",
             "com.android.systemui",
             "com.coloros.smartsidebar",
-            "com.oplus.contentportal",
         ).forEach { target ->
             val intent =
                 Intent(ModulePreferences.ACTION_PINNED_TARGETS_CHANGED).apply {

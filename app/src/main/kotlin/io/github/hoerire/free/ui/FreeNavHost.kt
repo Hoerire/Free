@@ -54,14 +54,11 @@ internal sealed interface AppRoute {
     /** 选中特效二级页：光圈 / 流光 / 选中放大，流光参数再往里一层。 */
     object RadialEffect : AppRoute
 
-    /** 自由传送二级页：解除限制 / 快速分享 / 触发延迟三个开关 + 延迟滑杆。 */
-    object FreeDrag : AppRoute
-
     /** 手势交互二级页：快速上滑 / 长按静音 / 关闭方式。 */
     object ZoomGesture : AppRoute
 
-    /** 贴边浮标二级页：贴边挂机 / 浮标数量。 */
-    object ZoomEdgeFloat : AppRoute
+    /** 系统增强二级页：横条沉浸 / 返回增强 / 贴边浮标。 */
+    object SystemEnhance : AppRoute
 
     /** 气泡通知设置页：应用 / 分身应用两组白名单 + 外观。 */
     object Bubble : AppRoute
@@ -103,14 +100,11 @@ internal fun FreeNavHost(
     onOutsideTapCloseModeChange: (OutsideTapCloseMode) -> Unit,
     onHandleSwipeUpToMiniEnabledChange: (Boolean) -> Unit,
     onExternalHandleEnabledChange: (Boolean) -> Unit,
+    onDragUnlockEnabledChange: (Boolean) -> Unit,
     onPauseInLandscapeChange: (Boolean) -> Unit,
     onPauseInGameModeChange: (Boolean) -> Unit,
     onPauseInKeyboardChange: (Boolean) -> Unit,
     onVerboseLogChange: (Boolean) -> Unit,
-    onFreeDragChange: (Boolean) -> Unit,
-    onQuickShareChange: (Boolean) -> Unit,
-    onDragLongPressEnabledChange: (Boolean) -> Unit,
-    onDragLongPressChange: (Int) -> Unit,
     onZoomMaxWindowCountChange: (Int) -> Unit,
     onZoomAllowAnyAppChange: (Boolean) -> Unit,
     onHideZoomInRecentsChange: (Boolean) -> Unit,
@@ -127,6 +121,7 @@ internal fun FreeNavHost(
     onPredictiveBackSwipeDistanceDpChange: (Int) -> Unit,
     onZoomExcludedChange: (List<String>) -> Unit,
     onRadialInteractionEnabledChange: (Boolean) -> Unit,
+    onZoomInteractionEnabledChange: (Boolean) -> Unit,
     onRadialKeepOpenChange: (Boolean) -> Unit,
     onSecondaryGroupSideChange: (RadialGroupSide) -> Unit,
     onRadialShimmerEnabledChange: (Boolean) -> Unit,
@@ -136,6 +131,9 @@ internal fun FreeNavHost(
     onPinnedTargetsChange: (RadialGroup, List<PinnedTarget>) -> Unit,
     onBlacklistChange: (List<String>) -> Unit,
     onBubbleSettingsChange: (BubbleSettingsTransform) -> Unit,
+    onStatusScrollEnabledChange: (Boolean) -> Unit,
+    onStatusScrollRoundsChange: (Int) -> Unit,
+    onStatusScrollSpeedChange: (Int) -> Unit,
     updateFlow: kotlinx.coroutines.flow.StateFlow<UpdateState>,
     onCheckUpdate: () -> Unit,
     onDismissUpdate: (String) -> Unit,
@@ -180,10 +178,9 @@ internal fun FreeNavHost(
         remember(backStack) { { pushRoute(AppRoute.RadialSize) } }
     val navigateToRadialEffect: () -> Unit =
         remember(backStack) { { pushRoute(AppRoute.RadialEffect) } }
-    val navigateToFreeDrag: () -> Unit = remember(backStack) { { pushRoute(AppRoute.FreeDrag) } }
     val navigateToGesture: () -> Unit = remember(backStack) { { pushRoute(AppRoute.ZoomGesture) } }
-    val navigateToEdgeFloat: () -> Unit =
-        remember(backStack) { { pushRoute(AppRoute.ZoomEdgeFloat) } }
+    val navigateToSystemEnhance: () -> Unit =
+        remember(backStack) { { pushRoute(AppRoute.SystemEnhance) } }
     val navigateToAbout: () -> Unit = remember(backStack) { { pushRoute(AppRoute.About) } }
     val navigateToBubble: () -> Unit = remember(backStack) { { pushRoute(AppRoute.Bubble) } }
     val navigateToZoomOptions: () -> Unit =
@@ -241,7 +238,7 @@ internal fun FreeNavHost(
                     onNavigateToRadialSettings = navigateToRadialSettings,
                     onNavigateToBlacklist = navigateToBlacklist,
                     onNavigateToZoomOptions = navigateToZoomOptions,
-                    onNavigateToFreeDrag = navigateToFreeDrag,
+                    onNavigateToSystemEnhance = navigateToSystemEnhance,
                     onNavigateToAbout = navigateToAbout,
                     onNavigateToBubble = navigateToBubble,
                 )
@@ -284,25 +281,22 @@ internal fun FreeNavHost(
                     onBack = popBackStack,
                     onHandleSwipeUpToMiniEnabledChange = onHandleSwipeUpToMiniEnabledChange,
                     onLongPressMuteChange = onLongPressMuteChange,
-                    onPredictiveBackEnabledChange = onPredictiveBackEnabledChange,
-                    onPredictiveBackSwipeDistanceDpChange = onPredictiveBackSwipeDistanceDpChange,
                     onOutsideTapCloseModeChange = onOutsideTapCloseModeChange,
                 )
-            AppRoute.ZoomEdgeFloat ->
-                EdgeFloatScreen(
+            AppRoute.SystemEnhance ->
+                SystemEnhanceScreen(
                     state = state,
                     onBack = popBackStack,
+                    onExternalHandleEnabledChange = onExternalHandleEnabledChange,
+                    onDragUnlockEnabledChange = onDragUnlockEnabledChange,
+                    onStatusScrollEnabledChange = onStatusScrollEnabledChange,
+                    onStatusScrollRoundsChange = onStatusScrollRoundsChange,
+                    onStatusScrollSpeedChange = onStatusScrollSpeedChange,
+                    onPredictiveBackEnabledChange = onPredictiveBackEnabledChange,
+                    onPredictiveBackSwipeDistanceDpChange = onPredictiveBackSwipeDistanceDpChange,
                     onFloatKeepAliveChange = onFloatKeepAliveChange,
                     onFloatHandleMaxCountChange = onFloatHandleMaxCountChange,
-                )
-            AppRoute.FreeDrag ->
-                FreeDragScreen(
-                    state = state,
-                    onBack = popBackStack,
-                    onFreeDragChange = onFreeDragChange,
-                    onQuickShareChange = onQuickShareChange,
-                    onDragLongPressEnabledChange = onDragLongPressEnabledChange,
-                    onDragLongPressChange = onDragLongPressChange,
+                    onZoomMaxWindowCountChange = onZoomMaxWindowCountChange,
                 )
             AppRoute.RadialEffect ->
                 RadialEffectScreen(
@@ -334,15 +328,13 @@ internal fun FreeNavHost(
                 ZoomOptionsScreen(
                     state = state,
                     onBack = popBackStack,
-                    onZoomMaxWindowCountChange = onZoomMaxWindowCountChange,
+                    onZoomInteractionEnabledChange = onZoomInteractionEnabledChange,
                     onZoomAllowAnyAppChange = onZoomAllowAnyAppChange,
                     onHideZoomInRecentsChange = onHideZoomInRecentsChange,
                     onAutoCloseWindowChange = onAutoCloseWindowChange,
-                    onExternalHandleEnabledChange = onExternalHandleEnabledChange,
                     onNavigateToZoomExcluded = navigateToZoomExcluded,
                     onNavigateToZoomLaunchScenes = navigateToZoomLaunchScenes,
                     onNavigateToGesture = navigateToGesture,
-                    onNavigateToEdgeFloat = navigateToEdgeFloat,
                 )
             AppRoute.ZoomLaunchScenes ->
                 ZoomLaunchScenesScreen(
@@ -427,9 +419,8 @@ private fun routeOfName(name: String): AppRoute? =
         AppRoute.RadialShimmer.javaClass.name -> AppRoute.RadialShimmer
         AppRoute.RadialSize.javaClass.name -> AppRoute.RadialSize
         AppRoute.RadialEffect.javaClass.name -> AppRoute.RadialEffect
-        AppRoute.FreeDrag.javaClass.name -> AppRoute.FreeDrag
         AppRoute.ZoomGesture.javaClass.name -> AppRoute.ZoomGesture
-        AppRoute.ZoomEdgeFloat.javaClass.name -> AppRoute.ZoomEdgeFloat
+        AppRoute.SystemEnhance.javaClass.name -> AppRoute.SystemEnhance
         AppRoute.Bubble.javaClass.name -> AppRoute.Bubble
         AppRoute.About.javaClass.name -> AppRoute.About
         else -> null

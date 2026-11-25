@@ -59,7 +59,8 @@ internal class NotifBundleHook(
 
     private fun rewriteBundle(starter: Any?, args: List<Any?>) {
         val settings = configuration.snapshot
-        if (!settings.enabled) return
+        // 通知点击改小窗属于小窗链路：总闸关掉时保持系统原有启动方式。
+        if (!settings.zoomInteractionActive) return
         // 锁屏状态下不接管，通知点击保持系统默认的全屏 + 解锁流程。
         //
         // 与 system_server 侧抢占路径（ActivityStarterZoomInjector 的 when 第一支

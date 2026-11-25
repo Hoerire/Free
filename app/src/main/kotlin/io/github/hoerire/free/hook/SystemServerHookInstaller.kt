@@ -26,8 +26,6 @@ internal class SystemServerHookInstaller(
         // 长按静音的回收：任务被划掉/被杀/被系统清理时，把该应用的音量放回去。
         WindowMuteHook(module).install(classLoader)
         FloatKeepAliveHook(module, configuration).install(classLoader)
-        // 触发延迟：把设置里的长按阈值写进系统设置，供应用侧的拖拽判定使用。
-        LongPressTimeoutHook.install(configuration)
         HandleSwipeUpHookInstaller(module, configuration, environment).install(classLoader)
         // 横条沉浸（小窗交互 → 横条沉浸）：只调系统自身的显隐入口，不建视图、不改布局参数。
         ExternalHandleHookInstaller(module, configuration).install(classLoader)
@@ -52,8 +50,8 @@ internal class SystemServerHookInstaller(
         // 表现为穿透到下层应用。角区触摸改由 SystemUI 的受信任 SPY 热区吞下。
 
         CenterZoomWindowHook(module, configuration).install(classLoader)
-        // 内容传送门的长按拖拽准入：给系统没登记的应用补通用白名单（「解除限制」开关）。
-        FreeDragHookInstaller(module, configuration, environment).install(classLoader)
+        // 解除限制：给内容传送门里系统没登记的应用补通用白名单。模块启用即生效。
+        DragUnlockHookInstaller(module, configuration, environment).install(classLoader)
         // 系统 Home 手势的指针监听器不认挖角，也不受抢流影响，单独在入口吞掉角区按下。
         SystemGestureSuppressor(module, configuration).install(classLoader)
 

@@ -34,7 +34,8 @@ internal fun ZoomLaunchScenesScreen(
     onZoomLaunchInterAppChange: (Boolean) -> Unit,
     onZoomLaunchClipboardChange: (Boolean) -> Unit,
 ) {
-    val enabled = state.settingsEditable && state.settings.enabled
+    val enabled = state.settingsEditable && state.settings.enabled &&
+        state.settings.zoomInteractionEnabled
     val sub = enabled
     val headsUpIcon = ImageVector.vectorResource(R.drawable.ic_heads_up_banner)
     SettingsPage(

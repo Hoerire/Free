@@ -105,7 +105,7 @@ internal class BubbleCoordinator(
         configuration.observe { next -> handler.post { applySettings(next) } }
         installPipeline(classLoader)
         installHeadsUp(classLoader)
-        // 状态栏滚动：与气泡共用通知管线，但有自己的白名单与视图。
+        // 状态栏滚动：与气泡共用通知管线，但不看气泡白名单，所有应用都滚。
         StatusTickerController(context, module, { settings }, ::log).also { ticker ->
             statusTicker = ticker
             ticker.install(classLoader)

@@ -5,7 +5,6 @@ import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
 import io.github.hoerire.free.hook.LauncherHookInstaller
-import io.github.hoerire.free.hook.PortalTapHookInstaller
 import io.github.hoerire.free.hook.ProcessConfiguration
 import io.github.hoerire.free.hook.SettingsHookInstaller
 import io.github.hoerire.free.hook.SidebarHookInstaller
@@ -93,6 +92,10 @@ class ModuleMain : XposedModule() {
                     "_exth" + settings.externalHandleEnabled +
                     // 底角手势总闸：关掉后抢流/防穿透/桌面接管都不参与，排查时先看这一位。
                     "_radial" + settings.cornerInteractionActive +
+                    // 小窗交互总闸：关掉时整组小窗改写不参与，排查冲突先看这一位。
+                    "_zoom" + settings.zoomInteractionActive +
+                    // 解除限制：给系统没登记的应用补通用拖拽白名单。
+                    "_du" + settings.dragUnlockActive +
                     "_keep" + settings.radialKeepOpen +
                     "_tap" + settings.outsideTapCloseMode.storedValue +
                     "_vlog" + settings.verboseLogEnabled +
@@ -100,12 +103,6 @@ class ModuleMain : XposedModule() {
                     "_bl" + settings.blacklistPackages.size +
                     // 「禁用浮窗」的条目数。
                     "_zx" + settings.zoomExcludedPackages.size +
-                    // 改写系统拖拽准入（解除限制）与接管面板（快速分享）的两个开关，
-                    // 以及「触发延迟」是否接管系统长按阈值（关闭时系统保持原厂 400ms）。
-                    "_fd" + settings.freeDragActive +
-                    "_qs" + settings.quickShareActive +
-                    "_dlp" + settings.dragLongPressActive +
-                    "_dlpMs" + settings.dragLongPressMsEffective +
                     // 返回增强：方向触发的开关与滑动距离（dp）。
                     "_pb" + settings.predictiveBackEffective +
                     "_pbDp" + settings.predictiveBackSwipeDistanceDpEffective +
@@ -136,12 +133,6 @@ class ModuleMain : XposedModule() {
             isSidebarProcess(processName) && param.packageName == ColorOsSidebarTarget.PACKAGE_NAME -> {
                 hooksInstalled = true
                 SidebarHookInstaller(this, settings).install(param.classLoader, param.applicationInfo)
-            }
-
-            processName == PortalTapHookInstaller.PACKAGE_NAME &&
-                param.packageName == PortalTapHookInstaller.PACKAGE_NAME -> {
-                hooksInstalled = true
-                PortalTapHookInstaller(this, settings).install(param.classLoader, param.applicationInfo?.sourceDir)
             }
 
             processName == PROCESS_SYSTEM_UI && param.packageName == PROCESS_SYSTEM_UI -> {
@@ -196,7 +187,6 @@ class ModuleMain : XposedModule() {
             param.processName == PROCESS_SYSTEM_UI ||
             param.processName == PROCESS_LAUNCHER ||
             param.processName.startsWith(PROCESS_ZOOM_SETTINGS) ||
-            param.processName == PortalTapHookInstaller.PACKAGE_NAME ||
             isSidebarProcess(param.processName)
 
     /**

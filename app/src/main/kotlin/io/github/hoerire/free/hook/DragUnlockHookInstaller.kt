@@ -6,7 +6,9 @@ import io.github.hoerire.free.log.ModuleLog
 import io.github.hoerire.free.log.VerboseLog
 
 /**
- * 自由传送·解除限制：解除内容传送门的长按拖拽准入限制。
+ * 解除限制：解除内容传送门的长按拖拽准入限制。
+ *
+ * 由「系统增强 → 解除限制」开关控制，默认开启；关掉后立刻退回原厂规则。
  *
  * 反编译结论（oplus-services.jar / oplus-framework.jar）：
  *   应用进程 bind 时 OplusViewDragSystemServer#preBindApplication 向
@@ -32,7 +34,7 @@ import io.github.hoerire.free.log.VerboseLog
  * 只改「能不能拖」，不参与「拖给谁」：投递目标仍由系统自己的规则决定。
  * 游戏模式下不补配置；横屏不做限制。
  */
-internal class FreeDragHookInstaller(
+internal class DragUnlockHookInstaller(
     private val module: XposedModule,
     private val configuration: ProcessConfiguration,
     private val environment: ModuleEnvironmentState,
@@ -46,30 +48,30 @@ internal class FreeDragHookInstaller(
     fun install(classLoader: ClassLoader) {
         val helper = runCatching { classLoader.loadClass(HELPER_CLASS) }.getOrNull()
         if (helper == null) {
-            ModuleLog.warn("FREE_DRAG_NO_HELPER")
+            ModuleLog.warn("DRAG_UNLOCK_NO_HELPER")
             return
         }
         packageClass = loadClass(classLoader, PACKAGE_CLASS)
         activityClass = loadClass(classLoader, ACTIVITY_CLASS)
         viewClass = loadClass(classLoader, VIEW_CLASS)
         if (packageClass == null || activityClass == null || viewClass == null) {
-            ModuleLog.warn("FREE_DRAG_NO_BEAN")
+            ModuleLog.warn("DRAG_UNLOCK_NO_BEAN")
             return
         }
         genericViews = buildGenericViews()
         // 原厂条目里补充的即此类配置：网页控件（浏览器文章页缺的正是它）。
         webViews = buildGenericViews(GENERIC_VIEWS.filter { it.second == "web" })
         if (genericViews.isEmpty()) {
-            ModuleLog.warn("FREE_DRAG_NO_VIEW")
+            ModuleLog.warn("DRAG_UNLOCK_NO_VIEW")
             return
         }
         val installed = hookConfigProvider(helper) + hookRawXmlProvider(helper)
         if (installed == 0) {
-            ModuleLog.warn("FREE_DRAG_NO_METHOD")
+            ModuleLog.warn("DRAG_UNLOCK_NO_METHOD")
         } else {
             // 唯一一条常开日志：hook 注入成功。详细日志关闭时其余诊断全部静默，
             // 这条走框架日志出口（不经 ModuleLog 的开关），用于确认注入发生过。
-            ModuleLog.install("FREE_DRAG_INSTALLED_" + installed)
+            ModuleLog.install("DRAG_UNLOCK_INSTALLED_" + installed)
         }
     }
 
@@ -84,7 +86,7 @@ internal class FreeDragHookInstaller(
                 .setId("free.freedrag.config")
                 .intercept { chain ->
                     val original = chain.proceed()
-                    if (!configuration.snapshot.freeDragActive) return@intercept original
+                    if (!configuration.snapshot.dragUnlockActive) return@intercept original
                     // 游戏模式下一律不补配置：游戏里的长按更值钱，横屏不算。
                     if (environment.inGameMode) return@intercept original
                     val packageName = chain.getArg(0) as? String
@@ -92,13 +94,13 @@ internal class FreeDragHookInstaller(
                     runCatching { withGenericEntry(packageName as String, original) }
                         .getOrElse { exception ->
                             // 逐次调用的诊断，只在详细日志开启时输出，避免刷屏。
-                            ModuleLog.debug(TAG, exception) { "FREE_DRAG_BUILD_FAILED" }
+                            ModuleLog.debug(TAG, exception) { "DRAG_UNLOCK_BUILD_FAILED" }
                             original
                         }
                 }
             1
         }.getOrElse { exception ->
-            ModuleLog.warn("FREE_DRAG_CONFIG_HOOK_FAILED", exception)
+            ModuleLog.warn("DRAG_UNLOCK_CONFIG_HOOK_FAILED", exception)
             0
         }
     }
@@ -120,7 +122,7 @@ internal class FreeDragHookInstaller(
                 .intercept { chain ->
                     val original = chain.proceed() as? String
                     if (!original.isNullOrEmpty()) return@intercept original
-                    if (!configuration.snapshot.freeDragActive) return@intercept original
+                    if (!configuration.snapshot.dragUnlockActive) return@intercept original
                     if (environment.inGameMode) return@intercept original
                     val packageName = chain.getArg(0) as? String
                     if (!isRewritable(packageName)) return@intercept original
@@ -128,7 +130,7 @@ internal class FreeDragHookInstaller(
                 }
             1
         }.getOrElse { exception ->
-            ModuleLog.warn("FREE_DRAG_RAWXML_HOOK_FAILED", exception)
+            ModuleLog.warn("DRAG_UNLOCK_RAWXML_HOOK_FAILED", exception)
             0
         }
     }
@@ -162,7 +164,7 @@ internal class FreeDragHookInstaller(
         if (originalWhite != null && originalWhite.size > MAX_APPEND_ACTIVITIES) {
             if (VerboseLog.enabled) {
                 ModuleLog.debug(TAG) {
-                    "FREE_DRAG_SKIP_LARGE_" + packageName + "_base" + originalWhite.size
+                    "DRAG_UNLOCK_SKIP_LARGE_" + packageName + "_base" + originalWhite.size
                 }
             }
             return original
@@ -193,7 +195,7 @@ internal class FreeDragHookInstaller(
         }
         if (VerboseLog.enabled) {
             ModuleLog.debug(TAG) {
-                "FREE_DRAG_CONFIG_" + packageName + "_base" + (originalWhite?.size ?: 0) +
+                "DRAG_UNLOCK_CONFIG_" + packageName + "_base" + (originalWhite?.size ?: 0) +
                     "_generic" + genericViews.size +
                     "_entries" + (whiteList.size + (originalWhite?.size ?: 0) * webViews.size)
             }
@@ -281,7 +283,7 @@ internal class FreeDragHookInstaller(
             ?: runCatching { Class.forName(name, false, loader) }.getOrNull()
 
     private companion object {
-        const val TAG = "FreeDrag"
+        const val TAG = "DragUnlock"
         const val HELPER_CLASS = "com.android.server.viewdrag.OplusViewDragRusHelper"
         const val PACKAGE_CLASS = "android.view.viewdrag.bean.PackageDragConfigInfo"
         const val ACTIVITY_CLASS = "android.view.viewdrag.bean.ActivityDragInfo"

@@ -19,6 +19,7 @@ import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.SwipeRight
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,7 +40,6 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
 import io.github.hoerire.free.BuildConfig
 import io.github.hoerire.free.R
@@ -76,7 +76,7 @@ internal fun ControlScreen(
     onNavigateToRadialSettings: () -> Unit,
     onNavigateToBlacklist: () -> Unit,
     onNavigateToZoomOptions: () -> Unit,
-    onNavigateToFreeDrag: () -> Unit,
+    onNavigateToSystemEnhance: () -> Unit,
     onNavigateToAbout: () -> Unit,
     onNavigateToBubble: () -> Unit,
 ) {
@@ -104,8 +104,8 @@ internal fun ControlScreen(
                             featuresEnabled = featuresEnabled,
                             onNavigateToRadialSettings = onNavigateToRadialSettings,
                             onNavigateToZoomOptions = onNavigateToZoomOptions,
+                            onNavigateToSystemEnhance = onNavigateToSystemEnhance,
                             onNavigateToBlacklist = onNavigateToBlacklist,
-                            onNavigateToFreeDrag = onNavigateToFreeDrag,
                             onNavigateToBubble = onNavigateToBubble,
                         )
                     }
@@ -116,14 +116,14 @@ internal fun ControlScreen(
     }
 }
 
-/** 三个配置分组的入口；具体开关在各自的二级页面内。 */
+/** 各功能分组的入口；具体开关在各自的二级页面内。 */
 @Composable
 private fun EntryCard(
     featuresEnabled: Boolean,
     onNavigateToRadialSettings: () -> Unit,
     onNavigateToZoomOptions: () -> Unit,
+    onNavigateToSystemEnhance: () -> Unit,
     onNavigateToBlacklist: () -> Unit,
-    onNavigateToFreeDrag: () -> Unit,
     onNavigateToBubble: () -> Unit,
 ) {
     SettingsGroup(modifier = Modifier.fillMaxWidth()) {
@@ -142,14 +142,13 @@ private fun EntryCard(
             startAction = { PreferenceIcon(Icons.Rounded.LockOpen, featuresEnabled) },
         )
         ArrowPreference(
-            title = stringResource(R.string.blacklist_title),
-            summary = stringResource(R.string.blacklist_summary),
-            onClick = onNavigateToBlacklist,
+            title = stringResource(R.string.system_enhance_title),
+            summary = stringResource(R.string.system_enhance_summary),
+            onClick = onNavigateToSystemEnhance,
             enabled = featuresEnabled,
-            startAction = { PreferenceIcon(Icons.Rounded.Block, featuresEnabled) },
+            startAction = { PreferenceIcon(Icons.Rounded.Tune, featuresEnabled) },
         )
-        // 气泡与自由传送原本各是独立卡片，并进这张卡后只留一行入口，
-        // 具体开关与滑杆都在各自的二级页里。
+        // 气泡入口：具体开关与滑杆都在二级页里。
         ArrowPreference(
             title = stringResource(R.string.bubble_feature_title),
             summary = stringResource(R.string.bubble_feature_summary),
@@ -157,14 +156,13 @@ private fun EntryCard(
             enabled = featuresEnabled,
             startAction = { PreferenceIcon(Icons.Rounded.Notifications, featuresEnabled) },
         )
+        // 排除列表是「整体停用」，与上面的功能入口不同类，固定排在最后。
         ArrowPreference(
-            title = stringResource(R.string.free_drag_title),
-            summary = stringResource(R.string.free_drag_summary),
-            onClick = onNavigateToFreeDrag,
+            title = stringResource(R.string.blacklist_title),
+            summary = stringResource(R.string.blacklist_summary),
+            onClick = onNavigateToBlacklist,
             enabled = featuresEnabled,
-            startAction = {
-                PreferenceIcon(ImageVector.vectorResource(R.drawable.ic_free_share), featuresEnabled)
-            },
+            startAction = { PreferenceIcon(Icons.Rounded.Block, featuresEnabled) },
         )
     }
 }

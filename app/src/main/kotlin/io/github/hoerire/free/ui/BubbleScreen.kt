@@ -27,7 +27,6 @@ import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.SwipeRight
 import androidx.compose.material.icons.rounded.Tune
@@ -75,7 +74,6 @@ private enum class BubblePage {
     Appearance,
     Timing,
     Preview,
-    StatusScroll,
     Suggestions,
 }
 
@@ -154,8 +152,6 @@ internal fun BubbleScreen(
             BubbleTimingPage(state, goBack, onSettingsChange)
         BubblePage.Preview ->
             BubblePreviewPage(state, goBack, onSettingsChange)
-        BubblePage.StatusScroll ->
-            BubbleStatusScrollPage(state, goBack, onSettingsChange)
         BubblePage.Suggestions ->
             BubbleSuggestionsPage(state, goBack, onSettingsChange)
         }
@@ -289,23 +285,6 @@ private fun BubbleOverview(
                     onClick = { onNavigate(BubblePage.Preview) },
                     enabled = bubbleEditable,
                     startAction = { PreferenceIcon(Icons.Rounded.ContentCopy, bubbleEditable) },
-                )
-                ArrowPreference(
-                    title = stringResource(R.string.bubble_group_status_scroll),
-                    summary =
-                        if (settings.statusScrollActive) {
-                            stringResource(
-                                R.string.bubble_status_scroll_summary_on,
-                                settings.statusScrollRounds,
-                                settings.statusScrollSpeed,
-                            )
-                        } else {
-                            stringResource(R.string.bubble_status_scroll_summary_off)
-                        },
-                    onClick = { onNavigate(BubblePage.StatusScroll) },
-                    // 状态栏滚动是独立功能：气泡总闸关掉也照样能进这一页。
-                    enabled = masterEditable,
-                    startAction = { PreferenceIcon(Icons.Rounded.SwipeRight, masterEditable) },
                 )
                 ArrowPreference(
                     title = stringResource(R.string.bubble_group_suggestions),
@@ -791,78 +770,6 @@ private fun BubblePreviewPage(
                             it.copy(
                                 bubblePreviewAlpha =
                                     ModulePreferences.coerceBubblePreviewAlpha(value),
-                            )
-                        }
-                    },
-                    showDpUnit = false,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun BubbleStatusScrollPage(
-    state: FrameworkConnectionState,
-    onBack: () -> Unit,
-    onSettingsChange: (transform: BubbleSettingsTransform) -> Unit,
-) {
-    val settings = state.settings
-    // 状态栏滚动是独立功能：只受模块总开关约束，气泡总闸关掉也能单独启用。
-    val statusEditable = state.settingsEditable && settings.enabled
-    SettingsPage(title = stringResource(R.string.bubble_group_status_scroll), onBack = onBack) {
-        item(key = "status_scroll") {
-            SettingsGroup(modifier = Modifier.fillMaxWidth()) {
-                SwitchPreference(
-                    checked = settings.statusScrollEnabled,
-                    onCheckedChange = { value ->
-                        onSettingsChange { it.copy(statusScrollEnabled = value) }
-                    },
-                    title = stringResource(R.string.bubble_status_scroll_enabled_title),
-                    summary = stringResource(R.string.bubble_status_scroll_enabled_summary),
-                    enabled = statusEditable,
-                    startAction = { PreferenceIcon(Icons.Rounded.Notifications, statusEditable) },
-                )
-                RemoteDpSliderPreference(
-                    icon = Icons.Rounded.Layers,
-                    confirmedValue = settings.statusScrollRounds,
-                    isUpdating = state.isUpdating,
-                    enabled = statusEditable && settings.statusScrollEnabled,
-                    title = stringResource(R.string.bubble_status_scroll_rounds_title),
-                    summary = stringResource(R.string.bubble_status_scroll_rounds_summary),
-                    minDp = ModulePreferences.MIN_STATUS_SCROLL_ROUNDS,
-                    maxDp = ModulePreferences.MAX_STATUS_SCROLL_ROUNDS,
-                    coerceDp = ModulePreferences::coerceStatusScrollRounds,
-                    onPreviewChange = {},
-                    onCommit = { value ->
-                        onSettingsChange {
-                            it.copy(
-                                statusScrollRounds =
-                                    ModulePreferences.coerceStatusScrollRounds(value),
-                            )
-                        }
-                    },
-                    showDpUnit = false,
-                )
-                RemoteDpSliderPreference(
-                    icon = Icons.Rounded.Speed,
-                    confirmedValue = settings.statusScrollSpeed,
-                    isUpdating = state.isUpdating,
-                    enabled = statusEditable && settings.statusScrollEnabled,
-                    title = stringResource(R.string.bubble_status_scroll_speed_title),
-                    summary = stringResource(
-                        R.string.bubble_status_scroll_speed_summary,
-                        settings.statusScrollSpeed,
-                    ),
-                    minDp = ModulePreferences.MIN_STATUS_SCROLL_SPEED,
-                    maxDp = ModulePreferences.MAX_STATUS_SCROLL_SPEED,
-                    coerceDp = ModulePreferences::coerceStatusScrollSpeed,
-                    onPreviewChange = {},
-                    onCommit = { value ->
-                        onSettingsChange {
-                            it.copy(
-                                statusScrollSpeed =
-                                    ModulePreferences.coerceStatusScrollSpeed(value),
                             )
                         }
                     },

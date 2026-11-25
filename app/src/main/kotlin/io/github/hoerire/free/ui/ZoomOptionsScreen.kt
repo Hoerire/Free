@@ -4,18 +4,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.DeleteSweep
-import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.OpenInNew
-import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.SwipeUp
-import androidx.compose.material.icons.rounded.UnfoldMore
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import io.github.hoerire.free.R
-import io.github.hoerire.free.config.ModulePreferences
 import io.github.hoerire.free.framework.FrameworkConnectionState
 import io.github.hoerire.free.ui.component.ArrowPreference
 import io.github.hoerire.free.ui.component.SectionTitle
@@ -51,18 +47,17 @@ private fun enabledSceneCount(state: FrameworkConnectionState): Int {
 internal fun ZoomOptionsScreen(
     state: FrameworkConnectionState,
     onBack: () -> Unit,
-    onZoomMaxWindowCountChange: (Int) -> Unit,
+    onZoomInteractionEnabledChange: (Boolean) -> Unit,
     onZoomAllowAnyAppChange: (Boolean) -> Unit,
     onHideZoomInRecentsChange: (Boolean) -> Unit,
     onAutoCloseWindowChange: (Boolean) -> Unit,
-    onExternalHandleEnabledChange: (Boolean) -> Unit,
     onNavigateToZoomExcluded: () -> Unit,
     onNavigateToZoomLaunchScenes: () -> Unit,
     onNavigateToGesture: () -> Unit,
-    onNavigateToEdgeFloat: () -> Unit,
 ) {
     val enabled = state.settingsEditable && state.settings.enabled
-    val sub = enabled
+    // 关掉「启用交互」时整页其余项一起灰掉：参数都还在，重新打开就能继续用。
+    val sub = enabled && state.settings.zoomInteractionEnabled
     SettingsPage(
         title = stringResource(R.string.zoom_limit_removed_title),
         onBack = onBack,
@@ -72,6 +67,15 @@ internal fun ZoomOptionsScreen(
         }
         item(key = "window") {
             SettingsGroup(modifier = Modifier.fillMaxWidth()) {
+                // 总闸放在最上面：与其它同类模块冲突时，关掉这一项即可整条让出小窗链路。
+                SwitchPreference(
+                    checked = state.settings.zoomInteractionEnabled,
+                    onCheckedChange = onZoomInteractionEnabledChange,
+                    title = stringResource(R.string.zoom_interaction_master_title),
+                    summary = stringResource(R.string.zoom_interaction_master_summary),
+                    enabled = enabled,
+                    startAction = { PreferenceIcon(Icons.Rounded.LockOpen, enabled) },
+                )
                 ArrowPreference(
                     title = stringResource(R.string.zoom_interaction_title),
                     summary =
@@ -118,43 +122,13 @@ internal fun ZoomOptionsScreen(
                     enabled = sub,
                     startAction = { PreferenceIcon(Icons.Rounded.DeleteSweep, sub) },
                 )
-                SwitchPreference(
-                    checked = state.settings.externalHandleEnabled,
-                    onCheckedChange = onExternalHandleEnabledChange,
-                    title = stringResource(R.string.external_handle_title),
-                    summary = stringResource(R.string.external_handle_summary),
-                    enabled = sub,
-                    startAction = { PreferenceIcon(Icons.Rounded.UnfoldMore, sub) },
-                )
-                RemoteDpSliderPreference(
-                    icon = Icons.Rounded.Layers,
-                    confirmedValue = state.settings.zoomMaxWindowCount,
-                    isUpdating = state.isUpdating,
-                    enabled = sub,
-                    title = stringResource(R.string.zoom_max_windows_title),
-                    summary = stringResource(R.string.zoom_max_windows_summary),
-                    minDp = ModulePreferences.MIN_ZOOM_MAX_WINDOW_COUNT,
-                    maxDp = ModulePreferences.MAX_ZOOM_MAX_WINDOW_COUNT,
-                    coerceDp = ModulePreferences::coerceZoomMaxWindowCount,
-                    onPreviewChange = {},
-                    onCommit = onZoomMaxWindowCountChange,
-                    showDpUnit = false,
-                )
-                // 手势交互与贴边浮标各自收成一行入口，具体开关在二级页里；
-                // summary 只列条目名，不复述二级页的说明文字。
+                // 手势交互收成一行入口，具体开关在二级页里；summary 只列条目名。
                 ArrowPreference(
                     title = stringResource(R.string.zoom_group_gesture_title),
                     summary = stringResource(R.string.zoom_gesture_entry_summary),
                     onClick = onNavigateToGesture,
                     enabled = sub,
                     startAction = { PreferenceIcon(Icons.Rounded.SwipeUp, sub) },
-                )
-                ArrowPreference(
-                    title = stringResource(R.string.zoom_group_edge_title),
-                    summary = stringResource(R.string.zoom_edge_entry_summary),
-                    onClick = onNavigateToEdgeFloat,
-                    enabled = sub,
-                    startAction = { PreferenceIcon(Icons.Rounded.PushPin, sub) },
                 )
             }
         }

@@ -117,32 +117,6 @@ class ModuleSettingsSnapshotTest {
     }
 
     @Test
-    fun dragLongPressDelayRequiresItsOwnSwitch() {
-        val off = ModuleSettingsSnapshot(enabled = true, dragLongPressMs = 120)
-        // 开关默认关闭：滑条记下的值不写进系统，实际阈值仍是官方 400ms。
-        assertFalse(off.dragLongPressActive)
-        assertEquals(ModulePreferences.DEFAULT_DRAG_LONG_PRESS_MS, off.dragLongPressMsEffective)
-
-        val on = off.copy(dragLongPressEnabled = true)
-        assertTrue(on.dragLongPressActive)
-        assertEquals(120, on.dragLongPressMsEffective)
-
-        // 模块总开关关掉时即使子开关开着也不接管。
-        assertFalse(on.copy(enabled = false).dragLongPressActive)
-        assertEquals(
-            ModulePreferences.DEFAULT_DRAG_LONG_PRESS_MS,
-            on.copy(enabled = false).dragLongPressMsEffective,
-        )
-
-        // 往返：开关与数值各存各的，互不覆盖。
-        val preferences = InMemoryPreferences()
-        on.writeTo(preferences.edit()).commit()
-        val restored = ModuleSettingsSnapshot.readFrom(preferences)
-        assertTrue(restored.dragLongPressEnabled)
-        assertEquals(120, restored.dragLongPressMs)
-    }
-
-    @Test
     fun pauseSwitchesRoundTripIndependently() {
         for (landscape in listOf(false, true)) {
             for (game in listOf(false, true)) {
@@ -311,6 +285,77 @@ class ModuleSettingsSnapshotTest {
         assertEquals(RadialGroup.Alternate, snapshot.groupForSide(left = true))
         assertEquals(RadialGroup.Primary, snapshot.groupForSide(left = false))
     }
+
+    @Test
+    fun zoomMasterSwitchGatesEveryZoomRewrite() {
+        // 子开关默认多为关闭，这里全部显式打开，才看得出总闸管不管得到它们。
+        val on =
+            ModuleSettingsSnapshot(
+                enabled = true,
+                externalHandleEnabled = true,
+                longPressMuteEnabled = true,
+                handleSwipeUpToMiniEnabled = true,
+                hideZoomInRecents = true,
+                floatKeepAlive = true,
+                autoCloseWindow = true,
+                zoomLaunchNotice = true,
+                zoomMaxWindowCount = 3,
+            )
+        assertTrue(on.zoomInteractionActive)
+        assertTrue(on.longPressMuteEffective)
+        assertTrue(on.handleSwipeUpToMiniEffective)
+
+        // 关掉总闸：整组小窗改写一起退出，不是只把界面变灰。
+        val off = on.copy(zoomInteractionEnabled = false)
+        assertFalse(off.zoomInteractionActive)
+        assertFalse(off.hideZoomInRecentsEffective)
+        assertFalse(off.autoCloseWindowEffective)
+        assertFalse(off.zoomLaunchNoticeEffective)
+        // 小窗数量不再随总闸作废：它已经搬到「系统增强」，只跟模块总开关走。
+        assertEquals(3, off.zoomMaxWindowCountEffective)
+        assertTrue(off.externalHandleEffective)
+        assertTrue(off.floatKeepAliveEffective)
+        assertTrue(off.dragUnlockActive)
+
+        // 往返：开关独立存盘，互不覆盖。
+        val preferences = InMemoryPreferences()
+        off.writeTo(preferences.edit()).commit()
+        assertFalse(ModuleSettingsSnapshot.readFrom(preferences).zoomInteractionEnabled)
+    }
+
+    @Test
+    fun dragUnlockHasItsOwnSwitch() {
+        val on = ModuleSettingsSnapshot(enabled = true, externalHandleEnabled = true)
+        assertTrue(on.dragUnlockActive)
+
+        // 单独关掉解除限制：只影响拖拽准入，其它能力照旧。
+        val unlockOff = on.copy(dragUnlockEnabled = false)
+        assertFalse(unlockOff.dragUnlockActive)
+        assertTrue(unlockOff.zoomInteractionActive)
+        assertTrue(unlockOff.externalHandleEffective)
+
+        // 模块总开关关掉时一律不生效。
+        assertFalse(on.copy(enabled = false).dragUnlockActive)
+
+        val preferences = InMemoryPreferences()
+        unlockOff.writeTo(preferences.edit()).commit()
+        assertFalse(ModuleSettingsSnapshot.readFrom(preferences).dragUnlockEnabled)
+    }
+
+    @Test
+    fun zoomWindowCountClampsUpToTen() {
+        assertEquals(10, ModulePreferences.coerceZoomMaxWindowCount(11))
+        assertEquals(10, ModulePreferences.coerceZoomMaxWindowCount(10))
+        assertEquals(1, ModulePreferences.coerceZoomMaxWindowCount(0))
+        // 数量与「启用交互」无关，只跟模块总开关走。
+        val settings = ModuleSettingsSnapshot(enabled = true, zoomMaxWindowCount = 7)
+        assertEquals(7, settings.copy(zoomInteractionEnabled = false).zoomMaxWindowCountEffective)
+        assertEquals(
+            ModulePreferences.DEFAULT_ZOOM_MAX_WINDOW_COUNT,
+            settings.copy(enabled = false).zoomMaxWindowCountEffective,
+        )
+    }
+
 }
 
 private class InMemoryPreferences(vararg initialValues: Pair<String, Any>) : SharedPreferences {
@@ -397,4 +442,6 @@ private class InMemoryPreferences(vararg initialValues: Pair<String, Any>) : Sha
             values.putAll(updates)
         }
     }
+
+
 }

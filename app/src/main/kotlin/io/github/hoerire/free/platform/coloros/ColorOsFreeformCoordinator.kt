@@ -93,7 +93,10 @@ internal class ColorOsFreeformCoordinator(
         existingForm = { packageName -> windowFormOf(packageName) },
         frontExisting = { packageName -> bringWindowToFront(packageName) },
         toggleFlexible = { packageName -> toggleFlexibleWindow(packageName) },
-        centerPlacement = { lastSettings.zoomMaxWindowCountEffective == 1 },
+        // 总闸关掉时保持系统原判：不接管居中摆放，也不参与数量裁决。
+        centerPlacement = {
+            lastSettings.zoomInteractionActive && lastSettings.zoomMaxWindowCountEffective == 1
+        },
     )
     private val windowGestures =
         ColorOsWindowGestures(context, controller, configuration, handler)
@@ -2399,6 +2402,7 @@ internal class ColorOsFreeformCoordinator(
             isTaskVisible(it) && flexZoomStateOf(it) == ColorOsFlexibleWindowState.ORDINARY
         }
         // 没到数量上限就不动：新窗口本来就能正常打开。
+        if (!lastSettings.zoomInteractionActive) return false
         if (ordinary.size < lastSettings.zoomMaxWindowCountEffective) return false
         // 气泡所属「实例」自己已经有普通小窗：这次是前置它，不是新开，不能把它缩小。
         // 主应用与分身共用包名，必须连用户一起比，否则会把另一个微信实例的窗口留下。

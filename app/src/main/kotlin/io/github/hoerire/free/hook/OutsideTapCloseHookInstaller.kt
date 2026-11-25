@@ -633,7 +633,7 @@ internal class OutsideTapCloseHookInstaller(
                     onFailure("OUTSIDE_TAP_REGION_REFRESH_FAILED", exception)
                 }
             }
-            if (!environmentAllowed() || !settings.enabled || settings.outsideTapCloseMode == OutsideTapCloseMode.Disabled) {
+            if (!environmentAllowed() || !settings.zoomInteractionActive || settings.outsideTapCloseMode == OutsideTapCloseMode.Disabled) {
                 synchronized(protectedTasks) { protectedTasks.clear() }
             }
         }
@@ -648,7 +648,7 @@ internal class OutsideTapCloseHookInstaller(
             val controller = captionControllerField.get(caption)
                 ?: return clearProtection(caption, "NO_CONTROLLER")
             val mode =
-                if (settings.enabled && environmentAllowed()) settings.outsideTapCloseMode
+                if (settings.zoomInteractionActive && environmentAllowed()) settings.outsideTapCloseMode
                 else OutsideTapCloseMode.Disabled
             if (mode == OutsideTapCloseMode.Disabled) return clearProtection(caption, "MODE_OFF")
             // 底部关闭不做任何防穿透：这条路径只认"点小窗底部横条"，
@@ -842,7 +842,7 @@ internal class OutsideTapCloseHookInstaller(
             synchronized(engines) {
                 val engine = engines.getOrPut(listener) { OutsideTapGestureEngine() }
                 val mode =
-                    if (settings.enabled && environmentAllowed()) settings.outsideTapCloseMode
+                    if (settings.zoomInteractionActive && environmentAllowed()) settings.outsideTapCloseMode
                     else OutsideTapCloseMode.Disabled
                 engine.updateMode(mode)
                 if (mode == OutsideTapCloseMode.Disabled) return@synchronized null

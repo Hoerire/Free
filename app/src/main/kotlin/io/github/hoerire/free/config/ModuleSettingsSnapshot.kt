@@ -89,6 +89,13 @@ internal data class ModuleSettingsSnapshot(
     val radialKeepOpen: Boolean = ModulePreferences.DEFAULT_RADIAL_KEEP_OPEN,
     /** 扇形交互总开关：关闭后底角不再呼出扇形菜单，其余配置保留。 */
     val radialInteractionEnabled: Boolean = ModulePreferences.DEFAULT_RADIAL_INTERACTION_ENABLED,
+    /** 小窗交互总开关：关闭后所有小窗改写一并退出，其余配置保留。 */
+    val zoomInteractionEnabled: Boolean = ModulePreferences.DEFAULT_ZOOM_INTERACTION_ENABLED,
+    /**
+     * 解除限制：给内容传送门里没有系统白名单的应用补一份通用配置，
+     * 任意页面都能长按拖起文字/图片。只影响「能不能拖」，不参与「拖给谁」。
+     */
+    val dragUnlockEnabled: Boolean = ModulePreferences.DEFAULT_DRAG_UNLOCK,
     /** 流光特效：选中项外沿的动效（光圈、星头、轨迹），独立于选中光圈。 */
     val radialShimmerEnabled: Boolean = ModulePreferences.DEFAULT_RADIAL_SHIMMER_ENABLED,
     /** 选中流光的参数（速度、亮度、宽度、发光等）。 */
@@ -97,17 +104,6 @@ internal data class ModuleSettingsSnapshot(
     val radialBreathingEnabled: Boolean = ModulePreferences.DEFAULT_RADIAL_BREATHING_ENABLED,
     /** 扇形半径百分比：左右两侧同步放大或缩小。 */
     val radialRadiusPercent: Int = ModulePreferences.DEFAULT_RADIAL_RADIUS_PERCENT,
-    /**
-     * 解除限制：system_server 侧给没有系统白名单的应用补一份通用配置，
-     * 任意页面都能长按拖起文字/图片。只影响「能不能拖」，不参与「拖给谁」。
-     */
-    val freeDragEnabled: Boolean = ModulePreferences.DEFAULT_FREE_DRAG,
-    /** 快速分享：拖拽时弹出模块自绘的分享面板，代替官方面板。 */
-    val quickShareEnabled: Boolean = ModulePreferences.DEFAULT_QUICK_SHARE,
-    /** 是否允许调整触发延迟；关闭时系统长按阈值保持原厂值。 */
-    val dragLongPressEnabled: Boolean = ModulePreferences.DEFAULT_DRAG_LONG_PRESS_ENABLED,
-    /** 拖拽触发延迟：系统长按阈值（毫秒），400 即官方行为。 */
-    val dragLongPressMs: Int = ModulePreferences.DEFAULT_DRAG_LONG_PRESS_MS,
 
     // ---- 气泡通知 ----------------------------------------------------------
     /** 气泡通知总开关；与模块总开关取与，见 [bubbleActive]。 */
@@ -141,7 +137,7 @@ internal data class ModuleSettingsSnapshot(
     val bubbleNoticeOnly: Boolean = ModulePreferences.DEFAULT_BUBBLE_NOTICE_ONLY,
     /** 装饰动效是否常驻（贴边呼吸、色散边）；关闭后只在交互时重绘。 */
     val bubbleMotionContinuous: Boolean = ModulePreferences.DEFAULT_BUBBLE_MOTION_CONTINUOUS,
-    /** 状态栏滚动：最新通知在时钟位置滚动显示。子开关，受气泡总闸约束。 */
+    /** 状态栏滚动：最新通知在时钟位置滚动显示。独立开关，只受模块总开关约束。 */
     val statusScrollEnabled: Boolean = ModulePreferences.DEFAULT_STATUS_SCROLL_ENABLED,
     val statusScrollRounds: Int = ModulePreferences.DEFAULT_STATUS_SCROLL_ROUNDS,
     /** 滚动速度（像素/秒）。 */
@@ -173,14 +169,14 @@ internal data class ModuleSettingsSnapshot(
             (leftCornerEnabled || rightCornerEnabled)
 
     /**
-     * 小窗相关 hook 的总闸，语义等同 [enabled]。
+     * 小窗相关 hook 的总闸：模块总开关 ×「启用交互」。
      *
      * 下面每个 xxxEffective 都是「总闸 && 该项开关」，hook 一律只读这些派生值：
-     * 总闸关闭时整组能力都不介入系统，而不是只把界面变灰。
-     * 「轻量打开」不作为独立总开关；保留该命名以避免 hook 侧全量改名。
+     * 总闸关闭时整组能力都不介入系统，而不是只把界面变灰 —— 与其它同类模块
+     * 同时装时，用户关掉这一项就等于把整条小窗链路让出去。
      */
     val zoomInteractionActive: Boolean
-        get() = enabled
+        get() = enabled && zoomInteractionEnabled
 
     val zoomAllowAnyAppEffective: Boolean get() = zoomInteractionActive && zoomAllowAnyApp
     val zoomLaunchNoticeEffective: Boolean get() = zoomInteractionActive && zoomLaunchNotice
@@ -191,10 +187,11 @@ internal data class ModuleSettingsSnapshot(
         get() = zoomInteractionActive && zoomLaunchClipboard
     val autoCloseWindowEffective: Boolean
         get() = zoomInteractionActive && autoCloseWindow
-    val hideZoomInRecentsEffective: Boolean get() = enabled && hideZoomInRecents
-    val floatKeepAliveEffective: Boolean get() = zoomInteractionActive && floatKeepAlive
-    /** 长按迷你窗只跟模块总开关走。 */
-    val longPressMuteEffective: Boolean get() = enabled && longPressMuteEnabled
+    val hideZoomInRecentsEffective: Boolean get() = zoomInteractionActive && hideZoomInRecents
+    /** 贴边挂机属于「系统增强」，只跟模块总开关走。 */
+    val floatKeepAliveEffective: Boolean get() = enabled && floatKeepAlive
+    /** 长按迷你窗跟小窗交互总闸走（属于「手势交互」页）。 */
+    val longPressMuteEffective: Boolean get() = zoomInteractionActive && longPressMuteEnabled
     /** 返回增强只跟模块总开关走：模块停用时等同关闭。 */
     val predictiveBackEffective: Boolean get() = enabled && predictiveBackEnabled
 
@@ -202,34 +199,15 @@ internal data class ModuleSettingsSnapshot(
     val predictiveBackSwipeDistanceDpEffective: Int
         get() =
             ModulePreferences.coercePredictiveBackSwipeDistanceDp(predictiveBackSwipeDistanceDp)
-    /** 快速上滑转迷你独立于启动场景开关，只跟模块总开关走。 */
-    val handleSwipeUpToMiniEffective: Boolean get() = enabled && handleSwipeUpToMiniEnabled
+    /** 快速上滑转迷你独立于启动场景开关，跟小窗交互总闸走。 */
+    val handleSwipeUpToMiniEffective: Boolean
+        get() = zoomInteractionActive && handleSwipeUpToMiniEnabled
 
-    /** 该项只跟模块总开关走：关掉时小窗横条与手势指示条都立即恢复系统默认显隐。 */
+    /** 横条沉浸属于「系统增强」，只跟模块总开关走。 */
     val externalHandleEffective: Boolean get() = enabled && externalHandleEnabled
 
-    /** 解除限制是否生效：模块总开关 ×「解除限制」。 */
-    val freeDragActive: Boolean get() = enabled && freeDragEnabled
-
-    /** 快速分享是否生效：模块总开关 ×「快速分享」。 */
-    val quickShareActive: Boolean get() = enabled && quickShareEnabled
-
-    /**
-     * 「触发延迟」是否生效：模块总开关 × 该开关。
-     *
-     * 关闭时不要写系统长按阈值（见 `LongPressTimeoutHook`）：
-     * 这个值是全局的，改了会连带影响所有长按判定。
-     */
-    val dragLongPressActive: Boolean get() = enabled && dragLongPressEnabled
-
-    /** 实际写入系统的长按阈值；未生效时一律是原厂默认值。 */
-    val dragLongPressMsEffective: Int
-        get() =
-            if (dragLongPressActive) {
-                ModulePreferences.coerceDragLongPressMs(dragLongPressMs)
-            } else {
-                ModulePreferences.DEFAULT_DRAG_LONG_PRESS_MS
-            }
+    /** 解除限制属于「系统增强」，只跟模块总开关走。 */
+    val dragUnlockActive: Boolean get() = enabled && dragUnlockEnabled
 
     /** 气泡通知是否生效：模块总开关 ×「气泡通知」。 */
     val bubbleActive: Boolean get() = enabled && bubbleEnabled
@@ -250,12 +228,23 @@ internal data class ModuleSettingsSnapshot(
             bubbleWhitelist.any { it == key }
         }
     }
-    /** 模块总开关关闭时，小窗数量与浮标数量都交还各自的默认值。 */
+    /**
+     * 小窗数量：**不受「启用交互」总闸约束**。
+     *
+     * 它描述的是系统自身的并发上限，关掉小窗改写不等于用户想把数量配置也一起作废；
+     * 真正决定是否改写数量的仍是 [zoomInteractionActive]（各 hook 自己判）。
+     */
     val zoomMaxWindowCountEffective: Int
-        get() = if (zoomInteractionActive) zoomMaxWindowCount else ModulePreferences.DEFAULT_ZOOM_MAX_WINDOW_COUNT
+        get() =
+            if (enabled) {
+                ModulePreferences.coerceZoomMaxWindowCount(zoomMaxWindowCount)
+            } else {
+                ModulePreferences.DEFAULT_ZOOM_MAX_WINDOW_COUNT
+            }
 
     val floatHandleMaxCountEffective: Int
-        get() = if (zoomInteractionActive) floatHandleMaxCount else ModulePreferences.DEFAULT_FLOAT_HANDLE_MAX_COUNT
+        get() =
+            if (enabled) floatHandleMaxCount else ModulePreferences.DEFAULT_FLOAT_HANDLE_MAX_COUNT
 
     fun isBlacklisted(packageName: String?): Boolean =
         packageName != null && blacklistPackages.any { it == packageName }
@@ -336,6 +325,8 @@ internal data class ModuleSettingsSnapshot(
             // 旧分项键不再写入，升级后一并清除，避免残留值干扰排查。
             .remove(ModulePreferences.LEGACY_KEY_ZOOM_INTERACTION_ENABLED)
             .putBoolean(ModulePreferences.KEY_RADIAL_INTERACTION_ENABLED, radialInteractionEnabled)
+            .putBoolean(ModulePreferences.KEY_ZOOM_INTERACTION_ENABLED, zoomInteractionEnabled)
+            .putBoolean(ModulePreferences.KEY_DRAG_UNLOCK, dragUnlockEnabled)
             .putBoolean(ModulePreferences.KEY_RADIAL_KEEP_OPEN, radialKeepOpen)
             .putBoolean(ModulePreferences.KEY_RADIAL_SHIMMER_ENABLED, radialShimmerEnabled)
             .putString(ModulePreferences.KEY_RADIAL_SHIMMER, radialShimmer.encode())
@@ -343,13 +334,6 @@ internal data class ModuleSettingsSnapshot(
             .putInt(
                 ModulePreferences.KEY_RADIAL_RADIUS_PERCENT,
                 ModulePreferences.coerceRadialRadiusPercent(radialRadiusPercent),
-            )
-            .putBoolean(ModulePreferences.KEY_FREE_DRAG, freeDragEnabled)
-            .putBoolean(ModulePreferences.KEY_QUICK_SHARE, quickShareEnabled)
-            .putBoolean(ModulePreferences.KEY_DRAG_LONG_PRESS_ENABLED, dragLongPressEnabled)
-            .putInt(
-                ModulePreferences.KEY_DRAG_LONG_PRESS_MS,
-                ModulePreferences.coerceDragLongPressMs(dragLongPressMs),
             )
             .putBoolean(ModulePreferences.KEY_BUBBLE_ENABLED, bubbleEnabled)
             .putString(
@@ -730,6 +714,14 @@ internal data class ModuleSettingsSnapshot(
                     ModulePreferences.KEY_RADIAL_INTERACTION_ENABLED,
                     ModulePreferences.DEFAULT_RADIAL_INTERACTION_ENABLED,
                 ),
+                zoomInteractionEnabled = preferences.getBoolean(
+                    ModulePreferences.KEY_ZOOM_INTERACTION_ENABLED,
+                    ModulePreferences.DEFAULT_ZOOM_INTERACTION_ENABLED,
+                ),
+                dragUnlockEnabled = preferences.getBoolean(
+                    ModulePreferences.KEY_DRAG_UNLOCK,
+                    ModulePreferences.DEFAULT_DRAG_UNLOCK,
+                ),
                 radialShimmerEnabled = preferences.getBoolean(
                     ModulePreferences.KEY_RADIAL_SHIMMER_ENABLED,
                     ModulePreferences.DEFAULT_RADIAL_SHIMMER_ENABLED,
@@ -747,22 +739,6 @@ internal data class ModuleSettingsSnapshot(
                         ModulePreferences.KEY_RADIAL_RADIUS_PERCENT,
                         ModulePreferences.DEFAULT_RADIAL_RADIUS_PERCENT,
                     ),
-                ),
-                freeDragEnabled = preferences.getBoolean(
-                    ModulePreferences.KEY_FREE_DRAG,
-                    ModulePreferences.DEFAULT_FREE_DRAG,
-                ),
-                quickShareEnabled = preferences.getBoolean(
-                    ModulePreferences.KEY_QUICK_SHARE,
-                    ModulePreferences.DEFAULT_QUICK_SHARE,
-                ),
-                dragLongPressEnabled = preferences.getBoolean(
-                    ModulePreferences.KEY_DRAG_LONG_PRESS_ENABLED,
-                    ModulePreferences.DEFAULT_DRAG_LONG_PRESS_ENABLED,
-                ),
-                dragLongPressMs = preferences.getInt(
-                    ModulePreferences.KEY_DRAG_LONG_PRESS_MS,
-                    ModulePreferences.DEFAULT_DRAG_LONG_PRESS_MS,
                 ),
                 bubbleEnabled = preferences.getBoolean(
                     ModulePreferences.KEY_BUBBLE_ENABLED,

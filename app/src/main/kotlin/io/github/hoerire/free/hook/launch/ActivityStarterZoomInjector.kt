@@ -151,7 +151,8 @@ internal class ActivityStarterZoomInjector(
             return false
         }
         val settings = configuration.snapshot
-        if (!settings.enabled) {
+        // 抢占开小窗属于小窗链路：「启用交互」关掉后不再改写任何启动。
+        if (!settings.zoomInteractionActive) {
             ModuleLog.debug(TAG) { "ZOOM_SKIP_DISABLED_" + stage }
             return false
         }
@@ -444,7 +445,8 @@ internal class ActivityStarterZoomInjector(
     private fun inject(starter: Any?) {
         if (starter == null) return
         val settings = configuration.snapshot
-        if (!settings.enabled) return
+        // 注入小窗参数属于小窗链路：「启用交互」关掉后原样交给系统。
+        if (!settings.zoomInteractionActive) return
         // 当前框架实现中，execute() 从 ActivityStarter.mIntent 取意图，
         // executeRequest() 从 ActivityStarter$Request.intent 取（该字段无 m 前缀）。
         val request = OemReflection.readField(starter, "mRequest")

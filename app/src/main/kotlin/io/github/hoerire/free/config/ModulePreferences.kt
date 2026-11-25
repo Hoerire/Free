@@ -204,6 +204,24 @@ internal object ModulePreferences {
     const val DEVICE_LINK_PACKAGE = "com.oplus.linker"
 
 
+    /**
+     * 小窗交互总闸（默认开）。
+     *
+     * 关掉后整组小窗改写全部退出：启动改写、数量裁决、自动收窗、隐藏卡片、
+     * 横条沉浸、点窗外关闭、快速上滑转迷你、长按静音、贴边挂机、解除限制。
+     * 与其它同类模块同时装时，用它一次性让出这条链路，不必逐项去关。
+     */
+    const val KEY_ZOOM_INTERACTION_ENABLED = "zoom_interaction_enabled_v1"
+
+    /**
+     * 解除限制（默认开）：解除内容传送门的长按拖拽准入限制。
+     *
+     * 系统的长按拖拽只对 sys_view_drag_list.xml 里登记过的包 + Activity + 控件类名生效，
+     * 没登记的包连配置都拿不到。打开后 system_server 侧补一份通用白名单，
+     * 让任意应用、任意页面都能长按拖起内容。只改「能不能拖」，不改「拖给谁」。
+     */
+    const val KEY_DRAG_UNLOCK = "drag_unlock_enabled_v1"
+
     const val KEY_RADIAL_KEEP_OPEN = "radial_keep_open"
 
     /**
@@ -235,39 +253,6 @@ internal object ModulePreferences {
 
     /** 扇形半径（百分比）：左右两侧共用同一个值，同时放大或缩小。 */
     const val KEY_RADIAL_RADIUS_PERCENT = "radial_radius_percent_v1"
-
-    /**
-     * 「解除限制」：解除内容传送门的长按拖拽准入限制。
-     *
-     * 系统的长按拖拽只对 sys_view_drag_list.xml 里登记过的包 + Activity + 控件类名生效，
-     * 没登记的包连配置都拿不到。打开后 hook 在配置下发处补一份通用白名单，
-     * 让任意应用、任意页面都能长按拖起内容。只改「能不能拖」，不改「拖给谁」。
-     */
-    const val KEY_FREE_DRAG = "free_drag_enabled"
-
-    /** 快速分享：拖拽时弹出模块自绘的分享面板，代替官方面板。 */
-    const val KEY_QUICK_SHARE = "quick_share_enabled"
-    const val DEFAULT_QUICK_SHARE = false
-
-    /**
-     * 是否允许调整触发延迟（默认关闭）。
-     *
-     * 关闭时**不写**系统长按阈值，应用侧看到的仍是原厂 400ms；打开后才按
-     * [KEY_DRAG_LONG_PRESS_MS] 改写。做成独立开关是因为改写的是全局
-     * `Settings.Secure.long_press_timeout`：它同时影响桌面图标长按编辑、文本选择等
-     * 所有长按判定，用户不主动要就不该被动改。
-     */
-    const val KEY_DRAG_LONG_PRESS_ENABLED = "drag_long_press_enabled_v1"
-    const val DEFAULT_DRAG_LONG_PRESS_ENABLED = false
-
-    /** 拖拽触发延迟：系统长按阈值（毫秒），默认 400 即官方行为。 */
-    const val KEY_DRAG_LONG_PRESS_MS = "drag_long_press_ms_v1"
-    const val DEFAULT_DRAG_LONG_PRESS_MS = 400
-    const val MIN_DRAG_LONG_PRESS_MS = 100
-    const val MAX_DRAG_LONG_PRESS_MS = 400
-
-    fun coerceDragLongPressMs(value: Int): Int =
-        value.coerceIn(MIN_DRAG_LONG_PRESS_MS, MAX_DRAG_LONG_PRESS_MS)
 
     // ---- 气泡通知 ----------------------------------------------------------
     //
@@ -305,7 +290,7 @@ internal object ModulePreferences {
     const val KEY_BUBBLE_NOTICE_ONLY = "bubble_notice_only_v1"
     const val KEY_BUBBLE_MOTION_CONTINUOUS = "bubble_motion_continuous_v1"
 
-    /** 状态栏滚动开关：气泡总闸之下的子开关，可以只滚不出气泡。 */
+    /** 状态栏滚动开关：独立于气泡总闸，可以只滚不出气泡。 */
     const val KEY_STATUS_SCROLL_ENABLED = "status_scroll_enabled_v1"
     const val KEY_STATUS_SCROLL_ROUNDS = "status_scroll_rounds_v1"
     /** 滚动速度（像素/秒）：恒定速度，不随文本长度变化。 */
@@ -487,7 +472,8 @@ internal object ModulePreferences {
 
     const val DEFAULT_ZOOM_MAX_WINDOW_COUNT = 1
     const val MIN_ZOOM_MAX_WINDOW_COUNT = 1
-    const val MAX_ZOOM_MAX_WINDOW_COUNT = 5
+    /** 上限 10：再多窗口在手机上已无法同时看清，但放开到 10 不增加任何栈内风险。 */
+    const val MAX_ZOOM_MAX_WINDOW_COUNT = 10
     /** 贴边数量：系统手机默认 2 个，只放大不缩小，上限 10。 */
     const val DEFAULT_FLOAT_HANDLE_MAX_COUNT = 2
     const val MIN_FLOAT_HANDLE_MAX_COUNT = 2
@@ -496,11 +482,13 @@ internal object ModulePreferences {
     const val DEFAULT_RADIAL_KEEP_OPEN = false
     /** 扇形交互默认开启：不想要扇形菜单的用户在设置里关掉即可。 */
     const val DEFAULT_RADIAL_INTERACTION_ENABLED = true
+    /** 小窗交互默认开启：与其它同类模块冲突时由用户主动关掉。 */
+    const val DEFAULT_ZOOM_INTERACTION_ENABLED = true
+    /** 解除限制默认开启：原先随模块总开关生效，做成开关后保持原有行为不变。 */
+    const val DEFAULT_DRAG_UNLOCK = true
     const val DEFAULT_RADIAL_SHIMMER_ENABLED = false
     /** 呼吸特效默认开启：幅度只有 ±2%，不喜欢可以在外观细节里关掉。 */
     const val DEFAULT_RADIAL_BREATHING_ENABLED = true
-    /** 解除限制默认关闭：改写的是系统级拖拽准入，由用户主动开启。 */
-    const val DEFAULT_FREE_DRAG = false
     /**
      * 扇形最多能放几个应用（收藏上限同值）。须定义在引用它的常量之前。
      *
