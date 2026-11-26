@@ -10,6 +10,7 @@ import io.github.hoerire.free.config.ModulePreferences
 import io.github.hoerire.free.config.RadialShimmer
 import io.github.hoerire.free.config.ModuleSettingsSnapshot
 import io.github.hoerire.free.config.OutsideTapCloseMode
+import io.github.hoerire.free.config.PredictiveBackMode
 import io.github.hoerire.free.config.PinnedTarget
 import io.github.hoerire.free.config.PinnedTargetCodec
 import io.github.hoerire.free.config.RadialGroup
@@ -227,6 +228,10 @@ internal class FrameworkConnectionRepository(private val context: Context) {
     /** 返回增强：边缘内滑后上滑切小窗、下拉打开更多。 */
     fun setPredictiveBackEnabled(enabled: Boolean) =
         updateSettings { it.copy(predictiveBackEnabled = enabled) }
+
+    /** 侧滑扩展的手势模式：上滑切窗+下滑更多 / 下滑切窗 / 下滑更多。 */
+    fun setPredictiveBackMode(mode: PredictiveBackMode) =
+        updateSettings { it.copy(predictiveBackMode = mode) }
 
     /** 返回增强的触发距离（dp）：内滑后上滑或下拉超过该距离才接管。 */
     fun setPredictiveBackSwipeDistanceDp(dp: Int) =

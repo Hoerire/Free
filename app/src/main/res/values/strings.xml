@@ -152,9 +152,15 @@
     <string name="mini_long_press_title">长按静音</string>
     <string name="mini_long_press_summary">长按迷你窗静音，再长按恢复</string>
     <string name="predictive_back_title">侧滑扩展</string>
-    <string name="predictive_back_summary">边缘内滑后上滑切小窗、下拉打开「更多」；不动或滑回去都算取消</string>
+    <string name="predictive_back_enable_title">启用侧滑扩展</string>
+    <string name="predictive_back_summary">边缘内滑后按手势模式执行动作；不动或滑回去都算取消</string>
+    <string name="predictive_back_mode_title">手势模式</string>
+    <string name="predictive_back_mode_summary">内滑之后往哪个方向滑、执行什么动作</string>
+    <string name="predictive_back_mode_both">上滑切窗 · 下滑更多</string>
+    <string name="predictive_back_mode_zoom_down">下滑切窗</string>
+    <string name="predictive_back_mode_more_down">下滑更多</string>
     <string name="predictive_back_swipe_distance_title">滑动距离</string>
-    <string name="predictive_back_swipe_distance_summary">内滑后上滑或下拉超过这个距离才接管；上滑切小窗，下拉打开「更多」</string>
+    <string name="predictive_back_swipe_distance_summary">内滑后滑动超过这个距离才触发；方向与动作由上面的手势模式决定</string>
     <string name="float_keep_alive_title">贴边挂机</string>
     <string name="float_keep_alive_summary">收成贴边浮标后保持应用继续运行</string>
     <string name="float_handle_max_title">贴边数量</string>

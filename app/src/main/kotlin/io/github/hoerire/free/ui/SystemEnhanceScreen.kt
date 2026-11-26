@@ -10,9 +10,11 @@ import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material.icons.rounded.SwipeDown
 import androidx.compose.material.icons.rounded.SwipeRight
 import androidx.compose.material.icons.rounded.UnfoldMore
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
@@ -20,8 +22,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import io.github.hoerire.free.R
 import io.github.hoerire.free.config.ModulePreferences
+import io.github.hoerire.free.config.PredictiveBackMode
 import io.github.hoerire.free.framework.FrameworkConnectionState
 import io.github.hoerire.free.ui.component.ArrowPreference
+import io.github.hoerire.free.ui.component.ListChoicePreference
 import io.github.hoerire.free.ui.component.PreferenceIcon
 import io.github.hoerire.free.ui.component.SettingsGroup
 import io.github.hoerire.free.ui.component.SwitchPreference
@@ -48,10 +52,12 @@ internal fun SystemEnhanceScreen(
     onBack: () -> Unit,
     onExternalHandleEnabledChange: (Boolean) -> Unit,
     onDragUnlockEnabledChange: (Boolean) -> Unit,
+    onHideZoomInRecentsChange: (Boolean) -> Unit,
     onStatusScrollEnabledChange: (Boolean) -> Unit,
     onStatusScrollRoundsChange: (Int) -> Unit,
     onStatusScrollSpeedChange: (Int) -> Unit,
     onPredictiveBackEnabledChange: (Boolean) -> Unit,
+    onPredictiveBackModeChange: (PredictiveBackMode) -> Unit,
     onPredictiveBackSwipeDistanceDpChange: (Int) -> Unit,
     onFloatKeepAliveChange: (Boolean) -> Unit,
     onFloatHandleMaxCountChange: (Int) -> Unit,
@@ -126,6 +132,17 @@ internal fun SystemEnhanceScreen(
                                 onPreviewChange = {},
                                 onCommit = onZoomMaxWindowCountChange,
                                 showDpUnit = false,
+                            )
+                            // 隐藏卡片：小窗应用不出现在最近任务；同属「系统增强」，不受总闸约束。
+                            SwitchPreference(
+                                checked = state.settings.hideZoomInRecents,
+                                onCheckedChange = onHideZoomInRecentsChange,
+                                title = stringResource(R.string.hide_zoom_in_recents_title),
+                                summary = stringResource(R.string.hide_zoom_in_recents_summary),
+                                enabled = enabled,
+                                startAction = {
+                                    PreferenceIcon(Icons.Rounded.VisibilityOff, enabled)
+                                },
                             )
                         }
                     }
@@ -208,10 +225,30 @@ internal fun SystemEnhanceScreen(
                             SwitchPreference(
                                 checked = state.settings.predictiveBackEnabled,
                                 onCheckedChange = onPredictiveBackEnabledChange,
-                                title = stringResource(R.string.predictive_back_title),
+                                title = stringResource(R.string.predictive_back_enable_title),
                                 summary = stringResource(R.string.predictive_back_summary),
                                 enabled = enabled,
                                 startAction = { PreferenceIcon(Icons.Rounded.Gesture, enabled) },
+                            )
+                            // 手势模式：上滑切窗+下滑更多 / 下滑切窗 / 下滑更多。
+                            ListChoicePreference(
+                                title = stringResource(R.string.predictive_back_mode_title),
+                                icon = { PreferenceIcon(Icons.Rounded.SwapVert, enabled) },
+                                selected = state.settings.predictiveBackMode,
+                                values = PredictiveBackMode.entries,
+                                valueText = {
+                                    when (it) {
+                                        PredictiveBackMode.ZoomUpMoreDown ->
+                                            stringResource(R.string.predictive_back_mode_both)
+                                        PredictiveBackMode.ZoomDown ->
+                                            stringResource(R.string.predictive_back_mode_zoom_down)
+                                        PredictiveBackMode.MoreDown ->
+                                            stringResource(R.string.predictive_back_mode_more_down)
+                                    }
+                                },
+                                onSelected = onPredictiveBackModeChange,
+                                enabled = enabled && state.settings.predictiveBackEnabled,
+                                description = stringResource(R.string.predictive_back_mode_summary),
                             )
                             // 滑动距离只在返回增强开启时才有意义，关闭时置灰。
                             RemoteDpSliderPreference(

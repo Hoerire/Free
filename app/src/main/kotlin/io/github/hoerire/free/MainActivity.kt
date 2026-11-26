@@ -94,6 +94,7 @@ class MainActivity : ComponentActivity() {
                     onFloatHandleMaxCountChange = repository::setFloatHandleMaxCount,
                     onLongPressMuteChange = repository::setLongPressMute,
                     onPredictiveBackEnabledChange = repository::setPredictiveBackEnabled,
+                    onPredictiveBackModeChange = repository::setPredictiveBackMode,
                     onPredictiveBackSwipeDistanceDpChange = repository::setPredictiveBackSwipeDistanceDp,
                     onRadialInteractionEnabledChange = repository::setRadialInteractionEnabled,
                     onZoomInteractionEnabledChange = repository::setZoomInteractionEnabled,

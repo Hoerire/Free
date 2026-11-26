@@ -6,6 +6,7 @@ import android.content.Intent
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import io.github.hoerire.free.config.ModulePreferences
+import io.github.hoerire.free.config.PredictiveBackMode
 import io.github.hoerire.free.log.ModuleLog
 import java.lang.reflect.Method
 
@@ -131,13 +132,22 @@ internal class PredictiveBackSwipeHook(
         lastY = y
         if (fired) return
         if (!armed) return
-        val threshold = configuration.snapshot.predictiveBackSwipeDistanceDpEffective * density
+        val snapshot = configuration.snapshot
+        val threshold = snapshot.predictiveBackSwipeDistanceDpEffective * density
         val delta = y - downY
-        when {
-            // 上滑：y 变小，切窗口形态。
-            delta <= -threshold -> fire(ModulePreferences.ACTION_PREDICTIVE_BACK_ZOOM)
-            // 下拉：y 变大，打开「更多」面板。
-            delta >= threshold -> fire(ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL)
+        // 方向即动作，具体由模式决定：有的模式只认下滑，有的两个方向都用。
+        when (snapshot.predictiveBackMode) {
+            PredictiveBackMode.ZoomUpMoreDown ->
+                when {
+                    // 上滑：y 变小，切窗口形态。
+                    delta <= -threshold -> fire(ModulePreferences.ACTION_PREDICTIVE_BACK_ZOOM)
+                    // 下拉：y 变大，打开「更多」面板。
+                    delta >= threshold -> fire(ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL)
+                }
+            PredictiveBackMode.ZoomDown ->
+                if (delta >= threshold) fire(ModulePreferences.ACTION_PREDICTIVE_BACK_ZOOM)
+            PredictiveBackMode.MoreDown ->
+                if (delta >= threshold) fire(ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL)
         }
     }
 

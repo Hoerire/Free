@@ -106,6 +106,8 @@ class ModuleMain : XposedModule() {
                     // 返回增强：方向触发的开关与滑动距离（dp）。
                     "_pb" + settings.predictiveBackEffective +
                     "_pbDp" + settings.predictiveBackSwipeDistanceDpEffective +
+                    // 侧滑扩展的手势模式（0 上滑切窗+下滑更多 / 1 下滑切窗 / 2 下滑更多）。
+                    "_pbMode" + settings.predictiveBackMode.storedValue +
                     // 气泡「只通知模式」：开启后气泡不接收触摸、到点直接消失。
                     "_noti" + settings.bubbleNoticeOnly
             }

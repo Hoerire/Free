@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import io.github.hoerire.free.apps.SelectableEntry
 import io.github.hoerire.free.config.OutsideTapCloseMode
 import io.github.hoerire.free.config.PinnedTarget
+import io.github.hoerire.free.config.PredictiveBackMode
 import io.github.hoerire.free.config.RadialGroup
 import io.github.hoerire.free.config.RadialGroupSide
 import io.github.hoerire.free.config.RadialShimmer
@@ -118,6 +119,7 @@ internal fun FreeNavHost(
     onFloatHandleMaxCountChange: (Int) -> Unit,
     onLongPressMuteChange: (Boolean) -> Unit,
     onPredictiveBackEnabledChange: (Boolean) -> Unit,
+    onPredictiveBackModeChange: (PredictiveBackMode) -> Unit,
     onPredictiveBackSwipeDistanceDpChange: (Int) -> Unit,
     onZoomExcludedChange: (List<String>) -> Unit,
     onRadialInteractionEnabledChange: (Boolean) -> Unit,
@@ -289,10 +291,12 @@ internal fun FreeNavHost(
                     onBack = popBackStack,
                     onExternalHandleEnabledChange = onExternalHandleEnabledChange,
                     onDragUnlockEnabledChange = onDragUnlockEnabledChange,
+                    onHideZoomInRecentsChange = onHideZoomInRecentsChange,
                     onStatusScrollEnabledChange = onStatusScrollEnabledChange,
                     onStatusScrollRoundsChange = onStatusScrollRoundsChange,
                     onStatusScrollSpeedChange = onStatusScrollSpeedChange,
                     onPredictiveBackEnabledChange = onPredictiveBackEnabledChange,
+                    onPredictiveBackModeChange = onPredictiveBackModeChange,
                     onPredictiveBackSwipeDistanceDpChange = onPredictiveBackSwipeDistanceDpChange,
                     onFloatKeepAliveChange = onFloatKeepAliveChange,
                     onFloatHandleMaxCountChange = onFloatHandleMaxCountChange,
@@ -330,7 +334,6 @@ internal fun FreeNavHost(
                     onBack = popBackStack,
                     onZoomInteractionEnabledChange = onZoomInteractionEnabledChange,
                     onZoomAllowAnyAppChange = onZoomAllowAnyAppChange,
-                    onHideZoomInRecentsChange = onHideZoomInRecentsChange,
                     onAutoCloseWindowChange = onAutoCloseWindowChange,
                     onNavigateToZoomExcluded = navigateToZoomExcluded,
                     onNavigateToZoomLaunchScenes = navigateToZoomLaunchScenes,

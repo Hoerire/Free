@@ -308,7 +308,6 @@ class ModuleSettingsSnapshotTest {
         // 关掉总闸：整组小窗改写一起退出，不是只把界面变灰。
         val off = on.copy(zoomInteractionEnabled = false)
         assertFalse(off.zoomInteractionActive)
-        assertFalse(off.hideZoomInRecentsEffective)
         assertFalse(off.autoCloseWindowEffective)
         assertFalse(off.zoomLaunchNoticeEffective)
         // 小窗数量不再随总闸作废：它已经搬到「系统增强」，只跟模块总开关走。
@@ -316,6 +315,8 @@ class ModuleSettingsSnapshotTest {
         assertTrue(off.externalHandleEffective)
         assertTrue(off.floatKeepAliveEffective)
         assertTrue(off.dragUnlockActive)
+        // 隐藏卡片同样搬进了「系统增强」，不再随总闸作废。
+        assertTrue(off.hideZoomInRecentsEffective)
 
         // 往返：开关独立存盘，互不覆盖。
         val preferences = InMemoryPreferences()
@@ -353,6 +354,29 @@ class ModuleSettingsSnapshotTest {
         assertEquals(
             ModulePreferences.DEFAULT_ZOOM_MAX_WINDOW_COUNT,
             settings.copy(enabled = false).zoomMaxWindowCountEffective,
+        )
+    }
+
+
+    @Test
+    fun predictiveBackModeRoundTripsAndDefaultsToBothDirections() {
+        assertEquals(
+            PredictiveBackMode.ZoomUpMoreDown,
+            ModuleSettingsSnapshot().predictiveBackMode,
+        )
+        val preferences = InMemoryPreferences()
+        ModuleSettingsSnapshot(predictiveBackMode = PredictiveBackMode.MoreDown)
+            .writeTo(preferences.edit())
+            .commit()
+        assertEquals(
+            PredictiveBackMode.MoreDown,
+            ModuleSettingsSnapshot.readFrom(preferences).predictiveBackMode,
+        )
+        // 未知存储值退回默认，不用崩溃换一次可读性。
+        val unknown = InMemoryPreferences(ModulePreferences.KEY_PREDICTIVE_BACK_MODE to 99)
+        assertEquals(
+            PredictiveBackMode.ZoomUpMoreDown,
+            ModuleSettingsSnapshot.readFrom(unknown).predictiveBackMode,
         )
     }
 

@@ -83,6 +83,8 @@ internal data class ModuleSettingsSnapshot(
     /** 返回增强的触发距离（dp）：内滑后上滑或下拉超过该距离才接管。 */
     val predictiveBackSwipeDistanceDp: Int =
         ModulePreferences.DEFAULT_PREDICTIVE_BACK_SWIPE_DISTANCE_DP,
+    /** 侧滑扩展的手势模式：上滑切窗+下滑更多 / 下滑切窗 / 下滑更多。 */
+    val predictiveBackMode: PredictiveBackMode = ModulePreferences.DEFAULT_PREDICTIVE_BACK_MODE,
     /** 贴边挂机：收成贴边浮标后保持应用继续运行。 */
     val floatKeepAlive: Boolean = ModulePreferences.DEFAULT_FLOAT_KEEP_ALIVE,
     /** 扇形呼出后未选择任何条目时保持显示，不自动收起。 */
@@ -187,7 +189,8 @@ internal data class ModuleSettingsSnapshot(
         get() = zoomInteractionActive && zoomLaunchClipboard
     val autoCloseWindowEffective: Boolean
         get() = zoomInteractionActive && autoCloseWindow
-    val hideZoomInRecentsEffective: Boolean get() = zoomInteractionActive && hideZoomInRecents
+    /** 隐藏卡片属于「系统增强」，只跟模块总开关走。 */
+    val hideZoomInRecentsEffective: Boolean get() = enabled && hideZoomInRecents
     /** 贴边挂机属于「系统增强」，只跟模块总开关走。 */
     val floatKeepAliveEffective: Boolean get() = enabled && floatKeepAlive
     /** 长按迷你窗跟小窗交互总闸走（属于「手势交互」页）。 */
@@ -319,6 +322,7 @@ internal data class ModuleSettingsSnapshot(
                 ModulePreferences.KEY_PREDICTIVE_BACK_SWIPE_DISTANCE_DP,
                 ModulePreferences.coercePredictiveBackSwipeDistanceDp(predictiveBackSwipeDistanceDp),
             )
+            .putInt(ModulePreferences.KEY_PREDICTIVE_BACK_MODE, predictiveBackMode.storedValue)
             // 按时长触发、三选一动作的旧键：升级后清掉，避免残留值干扰排查。
             .remove(ModulePreferences.LEGACY_KEY_PREDICTIVE_BACK_HOLD_MS)
             .remove(ModulePreferences.LEGACY_KEY_PREDICTIVE_BACK_ACTION)
@@ -704,6 +708,13 @@ internal data class ModuleSettingsSnapshot(
                         preferences.getInt(
                             ModulePreferences.KEY_PREDICTIVE_BACK_SWIPE_DISTANCE_DP,
                             ModulePreferences.DEFAULT_PREDICTIVE_BACK_SWIPE_DISTANCE_DP,
+                        ),
+                    ),
+                predictiveBackMode =
+                    PredictiveBackMode.fromStoredValue(
+                        preferences.getInt(
+                            ModulePreferences.KEY_PREDICTIVE_BACK_MODE,
+                            ModulePreferences.DEFAULT_PREDICTIVE_BACK_MODE.storedValue,
                         ),
                     ),
                 radialKeepOpen = preferences.getBoolean(

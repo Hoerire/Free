@@ -7,7 +7,6 @@ import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.SwipeUp
-import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -49,7 +48,6 @@ internal fun ZoomOptionsScreen(
     onBack: () -> Unit,
     onZoomInteractionEnabledChange: (Boolean) -> Unit,
     onZoomAllowAnyAppChange: (Boolean) -> Unit,
-    onHideZoomInRecentsChange: (Boolean) -> Unit,
     onAutoCloseWindowChange: (Boolean) -> Unit,
     onNavigateToZoomExcluded: () -> Unit,
     onNavigateToZoomLaunchScenes: () -> Unit,
@@ -105,14 +103,6 @@ internal fun ZoomOptionsScreen(
                     summary = stringResource(R.string.zoom_allow_any_app_summary),
                     enabled = sub,
                     startAction = { PreferenceIcon(Icons.Rounded.LockOpen, sub) },
-                )
-                SwitchPreference(
-                    checked = state.settings.hideZoomInRecents,
-                    onCheckedChange = onHideZoomInRecentsChange,
-                    title = stringResource(R.string.hide_zoom_in_recents_title),
-                    summary = stringResource(R.string.hide_zoom_in_recents_summary),
-                    enabled = sub,
-                    startAction = { PreferenceIcon(Icons.Rounded.VisibilityOff, sub) },
                 )
                 SwitchPreference(
                     checked = state.settings.autoCloseWindow,

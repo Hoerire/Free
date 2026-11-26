@@ -152,6 +152,15 @@ internal object ModulePreferences {
     const val KEY_PREDICTIVE_BACK_ENABLED = "predictive_back_enabled_v1"
     const val DEFAULT_PREDICTIVE_BACK_ENABLED = false
 
+    /**
+     * 侧滑扩展的手势模式，见 [PredictiveBackMode]。
+     *
+     * 默认 [PredictiveBackMode.ZoomUpMoreDown]：上滑切小窗、下滑打开「更多」，
+     * 与 4.0.7 之前的行为一致，升级后不改变手感。
+     */
+    const val KEY_PREDICTIVE_BACK_MODE = "predictive_back_mode_v1"
+    val DEFAULT_PREDICTIVE_BACK_MODE = PredictiveBackMode.ZoomUpMoreDown
+
     /** 按时长/三选一动作时代的旧键：只用于读取迁移与清除残留。 */
     const val LEGACY_KEY_PREDICTIVE_BACK_ACTION = "predictive_back_action_v1"
     const val LEGACY_KEY_PREDICTIVE_BACK_HOLD_MS = "predictive_back_hold_ms_v1"

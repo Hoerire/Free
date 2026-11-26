@@ -24,8 +24,9 @@ import io.github.hoerire.free.log.VerboseLog
  *     isExtraInfoMatch 都直接返回 true，不需要额外条件；
  *   · 原厂已登记的应用，把 web 控件追加进它每个 Activity 的控件列表：原厂是「命中第一条即返回」，
  *     只追加在末尾救不了「原厂写了这个 Activity、却没写 WebView」的页面（浏览器就是这种）；
- *   · 系统按 getSimpleName() 精确匹配，所以名单只能覆盖已知类名。混淆后的单字母类名
- *     （如 VIA 的 t4.b）放在最后兜底。
+ *   · 系统按 getSimpleName() 精确匹配，所以名单只能覆盖已知类名。名单**必须保持精简**：
+ *     条目随 ApplicationInfo 进 binder，按 provider 数放大，堆长尾类名会让应用
+ *     在发布 ContentProvider 时超 1MB 而 abort（见 CORE_VIEWS 注释）。
  *
  * 两道硬限制（都是应用进程内的判定，system_server 改不了）：
  *   · Compose / 自绘渲染的页面没有标准控件，按类名匹配不到，取不到内容；
@@ -58,9 +59,9 @@ internal class DragUnlockHookInstaller(
             ModuleLog.warn("DRAG_UNLOCK_NO_BEAN")
             return
         }
-        genericViews = buildGenericViews()
+        genericViews = buildGenericViews(CORE_VIEWS)
         // 原厂条目里补充的即此类配置：网页控件（浏览器文章页缺的正是它）。
-        webViews = buildGenericViews(GENERIC_VIEWS.filter { it.second == "web" })
+        webViews = buildGenericViews(APPEND_VIEWS)
         if (genericViews.isEmpty()) {
             ModuleLog.warn("DRAG_UNLOCK_NO_VIEW")
             return
@@ -238,9 +239,9 @@ internal class DragUnlockHookInstaller(
         return activity
     }
 
-    /** 按 (类名, 类型) 批量构造 ViewDragInfo；[source] 用于只取其中 web 一类。 */
+    /** 按 (类名, 类型) 批量构造 ViewDragInfo；表尽量精简，见 CORE_VIEWS 注释。 */
     private fun buildGenericViews(
-        source: List<Pair<String, String>> = GENERIC_VIEWS,
+        source: List<Pair<String, String>>,
     ): List<Any> {
         val viewType = viewClass ?: return emptyList()
         val constructor = runCatching { viewType.getDeclaredConstructor() }.getOrNull() ?: return emptyList()
@@ -314,311 +315,39 @@ internal class DragUnlockHookInstaller(
             "com.oplus.launcher",
         )
 
-        /** 混淆后常见的单字母类名，作为兜底条目使用，见 [GENERIC_VIEWS]。 */
-        val OBFUSCATED_WEB_NAMES: List<String> =
-            (('a'..'z') + ('A'..'Z')).map(Char::toString)
-
         /**
-         * 通用控件表（类名 → 拖拽类型）。
+         * 核心控件表（类名 → 拖拽类型）。
          *
-         * 系统用 getSimpleName() 精确匹配，列父类没有用，只能一个类名一条。
-         * 组成：原厂白名单里出现过的第三方控件名（去重、按频次降序）
-         *     + 常见图片库类名
-         *     + 各家浏览器内核的 WebView 子类名
-         *     + 末尾兜底的单字母类名（混淆后的 WebView 子类，如 VIA 的 t4.b）
-         * 常用的排前面：匹配从前往后遍历，命中即返回。
+         * **不要往这里堆长尾类名。** 这份表随 ApplicationInfo 进 binder，而应用发布
+         * ContentProvider 时每个 ProviderInfo 都带一份 ApplicationInfo —— 条目数会被
+         * 「provider 数」放大。284 条通用控件 × 多个 provider 就会超过 1MB 上限，
+         * 应用在 Application.onCreate 阶段直接 abort（梦幻西游 TransactionTooLargeException
+         * 就是这么来的）。只保留覆盖面最高的文本/图片/网页控件。
          */
-        val GENERIC_VIEWS = listOf(
-            "AppCompatTextView" to "text",
+        val CORE_VIEWS = listOf(
             "TextView" to "text",
+            "AppCompatTextView" to "text",
             "ImageView" to "image",
             "AppCompatImageView" to "image",
+            "WebView" to "web",
+            "X5WebView" to "web",
             "SimpleDraweeView" to "image",
             "CircleImageView" to "image",
-            "RoundedImageView" to "image",
-            "RoundImageView" to "image",
-            "CoolEllipsizeTextView" to "text",
-            "AutoLinkTextView" to "text",
-            "AndroidComposeView" to "compose",
-            // 网页控件：标准名 + 各家内核/混淆后的常见子类名。
-            // 夸克 = UC 内核（WebViewAndroid / BrowserWebViewEx），
-            // 系统浏览器 = heytap 内核（com.heytap.webview.kernel.WebView 及其外部子类）。
+            "ReactTextView" to "text",
+            "ReactImageView" to "image",
+        )
+
+        /**
+         * 追加到原厂 Activity 条目里的网页控件。
+         *
+         * 只补网页这一类：浏览器文章页缺的就是它。条目数会乘以 Activity 数，
+         * 所以这里同样保持个位数。
+         */
+        val APPEND_VIEWS = listOf(
             "WebView" to "web",
             "X5WebView" to "web",
             "WebViewAndroid" to "web",
             "BrowserWebViewEx" to "web",
-            "BaseWebView" to "web",
-            "NestedScrollWebView" to "web",
-            "ArticleWebView" to "web",
-            "SafeWebView" to "web",
-            "SystemWebView" to "web",
-            "InnerSystemWebView" to "web",
-            "KKWebView" to "web",
-            "MCWebView" to "web",
-            "PooledWebView" to "web",
-            "CheckWebView" to "web",
-            "ClientWebView" to "web",
-            "ReactTextView" to "text",
-            "RemoteImageView" to "image",
-            "CommentTextView" to "text",
-            "PhotoView" to "image",
-            "ReactImageView" to "image",
-            "DXNativeTextView" to "text",
-            "TTRichTextView" to "text",
-            "AliUrlImageView" to "image",
-            "NightModeAsyncImageView" to "image",
-            "KwaiImageView" to "image",
-            "ScaleTextView" to "text",
-            "ExpandableTextView" to "text",
-            "SubsamplingScaleImageView" to "image",
-            "CoverImageView" to "image",
-            "EmojiTextView" to "text",
-            "TouchImageView" to "image",
-            "PhotoDraweeView" to "image",
-            "XYImageView" to "image",
-            "BIUITextView" to "text",
-            "MMNeat7extView" to "text",
-            "MultiTouchImageView" to "image",
-            "PreLayoutTextView" to "text",
-            "AsyncImageView" to "image",
-            "AssembleScaleView" to "image",
-            "TUrlImageView" to "image",
-            "CommentThumbImageView" to "image",
-            "BPTextView" to "text",
-            "MMTextView" to "text",
-            "SmartImageView" to "image",
-            "RCTRoundImageView" to "image",
-            "MGSimpleDraweeView" to "image",
-            "CommentKwaiImageView" to "image",
-            "DXNativeFastText" to "text",
-            "DXNativeRichText" to "text",
-            "MTextView" to "text",
-            "WubaDraweeView" to "image",
-            "VipImageView" to "image",
-            "PinchImageView" to "image",
-            "BiliImageView" to "image",
-            "HImageView" to "image",
-            "WatermarkImageView" to "image",
-            "PicassoImageView" to "image",
-            "ShapeableImageView" to "image",
-            "DYImageView" to "image",
-            "DuImageLoaderView" to "image",
-            "BPImageView" to "image",
-            "RichTextView" to "text",
-            "SingleLineTextView" to "text",
-            "PatchedTextView" to "text",
-            "ZoomImageView" to "image",
-            "FontTextView" to "text",
-            "FeedTitleTextView" to "text",
-            "UgcPlayableView" to "image",
-            "PicassoTextView" to "text",
-            "RoundRectImageView" to "image",
-            "CustomTextView" to "text",
-            "AHPictureView" to "image",
-            "FixedImageView" to "image",
-            "MaxLinedLayoutTextView" to "text",
-            "WeImageView" to "image",
-            "MaskImageView" to "image",
-            "RichTextSpanInterceptNoTextView" to "text",
-            "FrescoImageView" to "image",
-            "TTObservedImageView" to "image",
-            "ZHDraweeView" to "image",
-            "AIOMsgTextView" to "text",
-            "QiyiDraweeView" to "image",
-            "RoundCornerImageView" to "image",
-            "EqualRatioImageView" to "image",
-            "IgImageView" to "image",
-            "ChattingEmojiView" to "image",
-            "MMRoundCornerImageView" to "image",
-            "ScrollMentionTextView" to "text",
-            "RatioImageView" to "image",
-            "CooTouchImageView" to "image",
-            "LargeZoomImageView" to "image",
-            "FeedDraweeView" to "image",
-            "BdSpanTouchFixTextView" to "text",
-            "BookCoverView" to "image",
-            "QZoneRichTextView" to "text",
-            "ImageFilterView" to "image",
-            "HippyTextView" to "text",
-            "MediumBoldTextView" to "text",
-            "HYRNImageView" to "image",
-            "SizedTextView" to "text",
-            "ExpandTextView" to "text",
-            "EllipsizeAutoLinkTextView" to "text",
-            "ProductImageLoaderView" to "image",
-            "XCircleImageView" to "image",
-            "IdenticonImageView" to "image",
-            "MBlogTextView" to "text",
-            "ThemeBiliImageView" to "image",
-            "ImproveTextView" to "text",
-            "SquareImageView" to "image",
-            "ReverseRemoteImageView" to "image",
-            "TransitionPhotoDraweeView" to "image",
-            "MentionTextView" to "text",
-            "ECDraweeView" to "image",
-            "RecRatioRoundedImageView" to "image",
-            "RecRatioImageView" to "image",
-            "HandlePressStateCommentTextView" to "text",
-            "DragPhotoView" to "image",
-            "EmojiconTextView" to "text",
-            "ZHTextView" to "text",
-            "HugePhotoDraweeView" to "image",
-            "EleMistImageView" to "image",
-            "MPTextView" to "text",
-            "TbListTextView" to "text",
-            "MucangImageView" to "image",
-            "TextWidget" to "text",
-            "RoundBubbleImageView" to "image",
-            "ETTextView" to "text",
-            "QCircleAsyncTextView" to "text",
-            "ArkSoftwareView" to "text",
-            "TXImageView" to "image",
-            "YKIconFontTextView" to "text",
-            "EllipsizeTextView" to "text",
-            "MJImageView" to "image",
-            "KKTextView" to "text",
-            "KKImageView" to "image",
-            "NeteaseMusicSimpleDraweeView" to "image",
-            "CustomThemeTextView" to "text",
-            "SinaTextView" to "text",
-            "CropStartImageView" to "image",
-            "RecommendDesTextView" to "text",
-            "AHScaleImageView" to "image",
-            "BoldTextView" to "text",
-            "RoundCornerAndAspectImageView" to "image",
-            "LargeImageCropView" to "image",
-            "SpannedTextView" to "text",
-            "THDesignTextView" to "text",
-            "FastImageViewWithUrl" to "image",
-            "MarkReadTextView" to "text",
-            "GalleryListRecyclingImageView" to "image",
-            "ExcludeFontPaddingTextView" to "text",
-            "BIUIImageView" to "image",
-            "ImoImageView" to "image",
-            "ResizeImageView" to "image",
-            "BigImageView" to "image",
-            "MBlogDetailTextView" to "text",
-            "CommentPicView" to "image",
-            "PolygonImageView" to "image",
-            "SplitDraggableImageView" to "image",
-            "NextExperiment3ExpandableTextView" to "text",
-            "TintTextView" to "text",
-            "DescTextView" to "text",
-            "SnsPostDescPreloadTextView" to "text",
-            "SnsCommentPreloadTextView" to "text",
-            "AsyncTextView" to "text",
-            "SnsTextView" to "text",
-            "DmtTextView" to "text",
-            "ECFrescoImageView" to "image",
-            "RatioRoundedImageView" to "image",
-            "LegoTextView" to "text",
-            "FitSubsamplingScaleImageView" to "image",
-            "KwaiFixedSimpleDraweeView" to "image",
-            "KwaiZoomImageView" to "image",
-            "MerchantKwaiImageView" to "image",
-            "CommentZoomImageView" to "image",
-            "TNodeImageView" to "image",
-            "StaticLayoutView" to "text",
-            "RichTextViewImpl" to "text",
-            "SimpleRtfTextView" to "text",
-            "TNImage" to "image",
-            "TNRichText" to "text",
-            "XJImageView" to "image",
-            "HtmlTextView" to "text",
-            "SelectableTextView" to "text",
-            "DynamicTextView" to "text",
-            "AndroidText" to "text",
-            "NoteDetailTextView" to "text",
-            "GestureImageView" to "image",
-            "MessageItemTextView" to "text",
-            "PhotoImageView" to "image",
-            "RadiusDraweeView" to "image",
-            "TextViewSupportEllipsize" to "text",
-            "LinkTextView" to "text",
-            "DPZoomImageView" to "image",
-            "MistTextView" to "text",
-            "KMImageView" to "image",
-            "MPImageView" to "image",
-            "MyTextView" to "text",
-            "TbImageView" to "image",
-            "EMTextView" to "text",
-            "GetCollapseTextView" to "text",
-            "WorkExpTextView" to "text",
-            "TopicTextView" to "text",
-            "BrowserImageTextView" to "text",
-            "GuildAsyncTextView" to "text",
-            "AioTextView" to "text",
-            "QFSExpandableAsyncTextView" to "text",
-            "RFWSquareImageView" to "image",
-            "RFWMatrixImageView" to "image",
-            "URLImageView" to "image",
-            "UVTextView" to "text",
-            "LargeImageView" to "image",
-            "SpanFontSizeTextView" to "text",
-            "YKTextView" to "text",
-            "YKRatioImageView" to "image",
-            "ScrollTextView" to "text",
-            "WubaScaleImageView" to "image",
-            "MeasureWidthTextView" to "text",
-            "DPImageView" to "image",
-            "MgFrescoImageView" to "image",
-            "SkinnableTextView" to "text",
-            "CommentContentViewWithBubbleBackground" to "text",
-            "LunaAdapterImageView" to "image",
-            "GXText" to "text",
-            "TextViewFixTouchConsume" to "text",
-            "AspectRatioImageView" to "image",
-            "WXTextView" to "text",
-            "CommentAttachmentView" to "image",
-            "SinaSubsamplingScaleImageView" to "image",
-            "EmotionTextView" to "text",
-            "NetworkImageView" to "image",
-            "FolderTextView" to "text",
-            "MaterialTextView" to "text",
-            "AHUIRichLabel" to "text",
-            "AutoAdjustImageView" to "image",
-            "SpannableTextViewNew" to "text",
-            "ImageViewDYEx" to "image",
-            "MateImageView" to "image",
-            "WRTextView" to "text",
-            "FrodoPhotoView" to "image",
-            "MoreActionTextView" to "text",
-            "RoundBorderImageView" to "image",
-            "ScaleAlignTextView" to "text",
-            "AtUserEmoticonTextView" to "text",
-            "CommentExpandTextView" to "text",
-            "ShowImageTextView" to "text",
-            "UgcVideoTitleMentionTextView" to "text",
-            "SquareCommentVideoImage" to "image",
-            "ZZSimpleDraweeView" to "image",
-            "ExcellentDraweeView" to "image",
-            "TycSVGImageView" to "image",
-            "WKImageView" to "image",
-            "WKTextView" to "text",
-            "QDFontTextView" to "text",
-            "CollapsibleTextView" to "text",
-            "TCAppCompatTextView" to "text",
-            "SamsSketchImageView" to "image",
-            "GradientTextView" to "text",
-            "CustomRoundAngleImageView" to "image",
-            "FixSimpleDraweeView" to "image",
-            "SSTextView" to "text",
-            "BdBaseImageView" to "image",
-            "EbuyRoundImageView" to "image",
-            "NovelContainerImageView" to "image",
-            "SnapImageView" to "image",
-            "ForegroundTextView" to "text",
-            "TimeTextView" to "text",
-            "SafeSelectableTextView" to "text",
-            "CheckedTextView" to "text",
-            "ScalingImageView" to "image",
-            "ScaleImageView" to "image",
-            "ShapedImageView" to "image",
-            "SimpleImageView" to "image",
-        ) +
-            // 单字母名放最后：先让有名字的规则匹配，字母只兜底。
-            // 早前放在最前面，网页里的单字母容器（如夸克的 z）会抢先被认成 web，
-            // 真正的 WebView 轮不到匹配，反而拖不动。
-            OBFUSCATED_WEB_NAMES.map { it to "web" }
+        )
     }
 }
