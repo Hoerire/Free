@@ -11,12 +11,15 @@ import io.github.hoerire.free.log.ModuleLog
 import java.lang.reflect.Method
 
 /**
- * 返回增强：边缘内滑开始返回手势后，手指**上滑或下拉**超过设定距离执行对应动作。
+ * 侧滑扩展：边缘内滑开始返回手势后，手指**上滑或下拉**超过设定距离执行对应动作。
+ *
+ * 上滑方向还有一道厂商拦截要一起处理，见 [SideGestureVerticalCancelHook]：
+ * 那边不放开的话，上滑的 MOVE 到不了这里。
  *
  * 方向即动作：上滑把焦点应用在「全屏 ↔ 小窗」之间切换，下拉打开「更多」面板。
  *
  * 原厂行为是「松手才返回」：手势过程中只是预览，`ACTION_UP` 才真正提交返回。
- * 这里接在返回增强手势的入口 `BackAnimationController.onMotionEvent(x, y, action, index,
+ * 这里接在侧滑扩展手势的入口 `BackAnimationController.onMotionEvent(x, y, action, index,
  * displayId)` 上，只观察、不改写任何事件——没滑够距离就松手时走的是原厂路径，行为完全不变。
  *
  * 判据是**方向 + 距离**而不是停留时长：手指在屏幕上停多久都不会触发，停住期间把手指滑回
@@ -33,7 +36,7 @@ internal class PredictiveBackSwipeHook(
     private val configuration: ProcessConfiguration,
     private val context: Context,
 ) {
-    /** 本次手势是否在跟踪（返回增强已开启且起手落在生效边缘）。 */
+    /** 本次手势是否在跟踪（侧滑扩展已开启且起手落在生效边缘）。 */
     @Volatile private var armed = false
 
     /** 本次手势是否已经触发过动作：触发后到松手之间的事件全部吞掉。 */

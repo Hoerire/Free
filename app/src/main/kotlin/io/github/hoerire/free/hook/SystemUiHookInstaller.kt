@@ -58,7 +58,7 @@ internal class SystemUiHookInstaller(
                         }.onFailure {
                             ModuleLog.warn("SYSTEMUI_NAV_HANDLE_IMMERSIVE_FAILED", it)
                         }
-                        // 返回增强：边缘内滑后上滑切小窗、下拉打开「更多」。
+                        // 侧滑扩展：边缘内滑后按方向执行动作。
                         // 只在 ColorOS 17+ 接线（返回增强手势与本地小窗切换都是这一代才有）。
                         if (RomFlavor.isColorOs17OrNewer) {
                             runCatching {
@@ -66,6 +66,14 @@ internal class SystemUiHookInstaller(
                                     .install(classLoader)
                             }.onFailure {
                                 ModuleLog.warn("SYSTEMUI_PREDICTIVE_BACK_INSTALL_FAILED", it)
+                            }
+                            // 厂商对竖向位移的取消判据不对称（上滑 1.0×、下拉 2.5×），
+                            // 上滑会被提前掐断，模块的距离判据走不到。这里放行那一条。
+                            runCatching {
+                                SideGestureVerticalCancelHook(module, configuration)
+                                    .install(classLoader)
+                            }.onFailure {
+                                ModuleLog.warn("SYSTEMUI_SIDE_VERTICAL_INSTALL_FAILED", it)
                             }
                         }
                         // 角区抢流（SystemUI 侧 InputMonitor + pilferPointers）**只在 ColorOS 17+ 启用**。
