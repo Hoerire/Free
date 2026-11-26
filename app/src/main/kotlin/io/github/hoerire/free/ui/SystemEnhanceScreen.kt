@@ -230,7 +230,7 @@ internal fun SystemEnhanceScreen(
                                 enabled = enabled,
                                 startAction = { PreferenceIcon(Icons.Rounded.Gesture, enabled) },
                             )
-                            // 手势模式：上滑切窗+下滑更多 / 下滑切窗 / 下滑更多。
+                            // 手势模式：只有两个双选项，两个方向各管一件事。
                             ListChoicePreference(
                                 title = stringResource(R.string.predictive_back_mode_title),
                                 icon = { PreferenceIcon(Icons.Rounded.SwapVert, enabled) },
@@ -240,10 +240,8 @@ internal fun SystemEnhanceScreen(
                                     when (it) {
                                         PredictiveBackMode.ZoomUpMoreDown ->
                                             stringResource(R.string.predictive_back_mode_both)
-                                        PredictiveBackMode.ZoomDown ->
-                                            stringResource(R.string.predictive_back_mode_zoom_down)
-                                        PredictiveBackMode.MoreDown ->
-                                            stringResource(R.string.predictive_back_mode_more_down)
+                                        PredictiveBackMode.ZoomDownMoreUp ->
+                                            stringResource(R.string.predictive_back_mode_more_up)
                                     }
                                 },
                                 onSelected = onPredictiveBackModeChange,

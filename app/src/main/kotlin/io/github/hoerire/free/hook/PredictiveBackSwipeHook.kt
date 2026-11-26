@@ -13,10 +13,8 @@ import java.lang.reflect.Method
 /**
  * 侧滑扩展：边缘内滑开始返回手势后，手指**上滑或下拉**超过设定距离执行对应动作。
  *
- * 上滑方向还有一道厂商拦截要一起处理，见 [SideGestureVerticalCancelHook]：
- * 那边不放开的话，上滑的 MOVE 到不了这里。
- *
- * 方向即动作：上滑把焦点应用在「全屏 ↔ 小窗」之间切换，下拉打开「更多」面板。
+ * 方向即动作，具体由 [io.github.hoerire.free.config.PredictiveBackMode] 决定：
+ * 默认「上滑切窗 · 下拉更多」，也可以选「上滑更多 · 下拉切窗」。
  *
  * 原厂行为是「松手才返回」：手势过程中只是预览，`ACTION_UP` 才真正提交返回。
  * 这里接在侧滑扩展手势的入口 `BackAnimationController.onMotionEvent(x, y, action, index,
@@ -125,7 +123,18 @@ internal class PredictiveBackSwipeHook(
     /**
      * 跟踪手指：上滑或下拉超过设定距离就触发，其余情况一律放行。
      *
-     * 只看纵向位移，不看时间：停住不动永远不会触发，滑回原位也不会；
+     * 只认纵向位移 dy；上滑额外乘一个系数 [UPWARD_FACTOR]，下拉直接用设置值。
+     *
+     * 为什么不能用合位移 sqrt(dx²+dy²)：onMotionEvent 的 DOWN 是在返回手势真正开始之后
+     * 才输入的，那时手指已经完成内滑，downX 本身就落在内滑后的位置。于是 dx 衡量的是
+     * 「内滑了多少」，不是「手指竖向运动了多少」——上滑抬手时 dx 还会一路回收
+     *（实测 -149 → -115），把它算进距离只会稀释真实行程。两个方向的内滑量相同，
+     * 用 dx 也不可能改善方向之间的不对称。
+     *
+     * 实际差异来自生理：内滑之后手腕已内旋，再上抬要先克服这个角度，同样行程体感更远。
+     * 所以上滑单独给一个更小的系数。
+     *
+     * 不看时间：停住不动永远不会触发，滑回原位也不会；
      * 阈值每次现场取，设置页改完不用重装钩子。
      */
     private fun onMove(chain: XposedInterface.Chain) {
@@ -133,24 +142,31 @@ internal class PredictiveBackSwipeHook(
         val y = (chain.getArg(1) as? Number)?.toFloat() ?: return
         lastX = x
         lastY = y
-        if (fired) return
-        if (!armed) return
+        // 诊断必须在 armed/fired 之前就挡掉，否则会把"没在跟踪的手势"也记进来，
+        // 日志里会出现一条早已越过阈值却始终不触发的假轨迹。
+        if (fired || !armed) return
         val snapshot = configuration.snapshot
         val threshold = snapshot.predictiveBackSwipeDistanceDpEffective * density
         val delta = y - downY
-        // 方向即动作，具体由模式决定：有的模式只认下滑，有的两个方向都用。
+        // 上滑单独用更短的阈值：内滑后手腕已内旋，再上抬要先克服这个角度，
+        // 同样的物理行程体感更远。下拉沿用设置值。
+        val up = threshold * UPWARD_FACTOR
+        // 方向即动作。两种模式都是双方向，互换了"哪个方向做哪件事"。
         when (snapshot.predictiveBackMode) {
             PredictiveBackMode.ZoomUpMoreDown ->
                 when {
-                    // 上滑：y 变小，切窗口形态。
-                    delta <= -threshold -> fire(ModulePreferences.ACTION_PREDICTIVE_BACK_ZOOM)
-                    // 下拉：y 变大，打开「更多」面板。
+                    // 上滑（y 变小）：切窗口形态。
+                    delta <= -up -> fire(ModulePreferences.ACTION_PREDICTIVE_BACK_ZOOM)
+                    // 下拉（y 变大）：打开「更多」面板。
                     delta >= threshold -> fire(ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL)
                 }
-            PredictiveBackMode.ZoomDown ->
-                if (delta >= threshold) fire(ModulePreferences.ACTION_PREDICTIVE_BACK_ZOOM)
-            PredictiveBackMode.MoreDown ->
-                if (delta >= threshold) fire(ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL)
+            PredictiveBackMode.ZoomDownMoreUp ->
+                when {
+                    // 上滑：打开「更多」面板。
+                    delta <= -up -> fire(ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL)
+                    // 下拉：切窗口形态。
+                    delta >= threshold -> fire(ModulePreferences.ACTION_PREDICTIVE_BACK_ZOOM)
+                }
         }
     }
 
@@ -230,6 +246,20 @@ internal class PredictiveBackSwipeHook(
 
     private companion object {
         const val CONTROLLER_CLASS = "com.android.wm.shell.back.BackAnimationController"
+
+        /**
+         * 上滑方向的阈值系数：100 dp 实际按 55 dp 触发。
+         *
+         * 依据来自实测：日志打印门槛是 0.4 × 245 = 98px，下拉首个采样点 103（吻合），
+         * 上滑首个采样点却是 -236——说明**上滑前面约 140px 行程模块没收到**。
+         * 你实际手滑约 248 + 140 = 388px，而下拉只有 350px，所以上滑确实更长。
+         *
+         * 补偿量约 140px，因此上滑阈值取 350 - 140 ≈ 210，即系数 0.55。
+         * 若仍偏长调到 0.45；若太灵敏回到 0.65。这只是补偿，不改变判定逻辑。
+         */
+        const val UPWARD_FACTOR = 0.4f
+
+        /** 下拉方向的阈值系数：1.0，直接用设置里的滑条值。 */
         const val ACTION_DOWN = 0
         const val ACTION_UP = 1
         const val ACTION_MOVE = 2

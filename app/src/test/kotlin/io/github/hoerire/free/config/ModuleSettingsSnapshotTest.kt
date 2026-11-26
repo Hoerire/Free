@@ -365,14 +365,22 @@ class ModuleSettingsSnapshotTest {
             ModuleSettingsSnapshot().predictiveBackMode,
         )
         val preferences = InMemoryPreferences()
-        ModuleSettingsSnapshot(predictiveBackMode = PredictiveBackMode.MoreDown)
+        ModuleSettingsSnapshot(predictiveBackMode = PredictiveBackMode.ZoomDownMoreUp)
             .writeTo(preferences.edit())
             .commit()
         assertEquals(
-            PredictiveBackMode.MoreDown,
+            PredictiveBackMode.ZoomDownMoreUp,
             ModuleSettingsSnapshot.readFrom(preferences).predictiveBackMode,
         )
-        // 未知存储值退回默认，不用崩溃换一次可读性。
+        // 已删除的单向模式（旧值 1 / 2）回落默认，旧配置不会错乱。
+        for (stale in listOf(1, 2)) {
+            val legacy = InMemoryPreferences(ModulePreferences.KEY_PREDICTIVE_BACK_MODE to stale)
+            assertEquals(
+                PredictiveBackMode.ZoomUpMoreDown,
+                ModuleSettingsSnapshot.readFrom(legacy).predictiveBackMode,
+            )
+        }
+        // 未知存储值同样退回默认，不用崩溃换一次可读性。
         val unknown = InMemoryPreferences(ModulePreferences.KEY_PREDICTIVE_BACK_MODE to 99)
         assertEquals(
             PredictiveBackMode.ZoomUpMoreDown,

@@ -157,8 +157,7 @@
     <string name="predictive_back_mode_title">手势模式</string>
     <string name="predictive_back_mode_summary">内滑之后往哪个方向滑、执行什么动作</string>
     <string name="predictive_back_mode_both">上滑切窗 · 下滑更多</string>
-    <string name="predictive_back_mode_zoom_down">下滑切窗</string>
-    <string name="predictive_back_mode_more_down">下滑更多</string>
+    <string name="predictive_back_mode_more_up">上滑更多 · 下滑切窗</string>
     <string name="predictive_back_swipe_distance_title">滑动距离</string>
     <string name="predictive_back_swipe_distance_summary">内滑后滑动超过这个距离才触发；方向与动作由上面的手势模式决定</string>
     <string name="float_keep_alive_title">贴边挂机</string>

@@ -67,14 +67,10 @@ internal class SystemUiHookInstaller(
                             }.onFailure {
                                 ModuleLog.warn("SYSTEMUI_PREDICTIVE_BACK_INSTALL_FAILED", it)
                             }
-                            // 厂商对竖向位移的取消判据不对称（上滑 1.0×、下拉 2.5×），
-                            // 上滑会被提前掐断，模块的距离判据走不到。这里放行那一条。
-                            runCatching {
-                                SideGestureVerticalCancelHook(module, configuration)
-                                    .install(classLoader)
-                            }.onFailure {
-                                ModuleLog.warn("SYSTEMUI_SIDE_VERTICAL_INSTALL_FAILED", it)
-                            }
+                            // 不要在这里 hook SideGestureDetector 的竖向取消分支。
+                            // 实测该分支在我们的用法下根本不会命中（诊断码一次未触发），
+                            // 而跳过它的 cancelGesture 会连带跳过 injectAllEvent()，
+                            // 那正是应用侧接收被扣事件的放行点——会让小窗内无法滚动。
                         }
                         // 角区抢流（SystemUI 侧 InputMonitor + pilferPointers）**只在 ColorOS 17+ 启用**。
                         //
