@@ -46,4 +46,53 @@ internal object HorizontalTickerMotion {
     fun isFinished(completedRounds: Int, displayRounds: Int): Boolean {
         return completedRounds >= displayRounds
     }
+
+    /** 两端渐隐的最大宽度：不超过可视宽度的 1/2，窄屏上也不会整条发虚。 */
+    fun maxEdgeFade(contentWidth: Float, requested: Float): Float {
+        if (contentWidth <= 0f || requested <= 0f) return 0f
+        return Math.min(requested, contentWidth / 2f)
+    }
+
+    /**
+     * 左端渐隐宽度：文本已经滚出去多少（`-offset`），最多 [maxFade]。
+     *
+     * 起点 `offset = 0` 时为 0——第一个字不该一出现就发虚；
+     * 文字向左滚的同时边缘才慢慢浮出来（10dp 在默认速度下约 0.4s 到满），
+     * 不会出现「刚进场就有一块发白」的突兀感。
+     */
+    fun leftFadeWidth(offset: Float, contentWidth: Float, maxFade: Float): Float {
+        val cap = maxEdgeFade(contentWidth, maxFade)
+        if (cap <= 0f) return 0f
+        return Math.min(cap, Math.max(0f, -offset))
+    }
+
+    /**
+     * 右端渐隐宽度：还有多少文本伸出可视区右侧，最多 [maxFade]。
+     *
+     * 滚到末尾时这一项自然收窄到 0，最后一段文字不会在右缘提前变淡。
+     */
+    fun rightFadeWidth(
+        offset: Float,
+        contentWidth: Float,
+        textWidth: Float,
+        maxFade: Float,
+    ): Float {
+        val cap = maxEdgeFade(contentWidth, maxFade)
+        if (cap <= 0f) return 0f
+        val beyond = textWidth + offset - contentWidth
+        return Math.min(cap, Math.max(0f, beyond))
+    }
+
+    /**
+     * 渐隐遮罩的四个颜色位置（0..1，相对可视宽度）。
+     *
+     * 依次是：可视区左沿、左端渐隐结束、右端渐隐开始、可视区右沿。
+     * 两段渐隐重叠时各让一半，保证位置单调，LinearGradient 不会报错。
+     */
+    fun fadeStopOffsets(contentWidth: Float, leftFade: Float, rightFade: Float): FloatArray {
+        if (contentWidth <= 0f) return floatArrayOf(0f, 0f, 1f, 1f)
+        val left = (leftFade / contentWidth).coerceIn(0f, 0.5f)
+        val right = (1f - rightFade / contentWidth).coerceIn(0.5f, 1f)
+        return floatArrayOf(0f, left, right, 1f)
+    }
 }

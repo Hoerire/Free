@@ -137,7 +137,7 @@
     <string name="zoom_gesture_entry_summary">快速上滑 · 长按静音 · 关闭方式</string>
     <string name="zoom_options_summary">自由浮窗数量、启动场景与窗口操作</string>
     <string name="zoom_max_windows_title">小窗数量</string>
-    <string name="zoom_max_windows_summary">同时存在的自由浮窗个数，最多 10 个</string>
+    <string name="zoom_max_windows_summary">同时存在的自由浮窗个数，最多 12 个</string>
     <string name="zoom_allow_any_app_title">解除限制</string>
     <string name="zoom_allow_any_app_summary">原本不支持浮窗的应用也能以自由浮窗打开</string>
     <string name="zoom_launch_notice_title">通知中心</string>

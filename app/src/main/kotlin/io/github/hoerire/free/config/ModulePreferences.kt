@@ -482,8 +482,8 @@ internal object ModulePreferences {
 
     const val DEFAULT_ZOOM_MAX_WINDOW_COUNT = 1
     const val MIN_ZOOM_MAX_WINDOW_COUNT = 1
-    /** 上限 10：再多窗口在手机上已无法同时看清，但放开到 10 不增加任何栈内风险。 */
-    const val MAX_ZOOM_MAX_WINDOW_COUNT = 10
+    /** 上限 12：再多窗口在手机上已无法同时看清，但放开到 12 不增加任何栈内风险。 */
+    const val MAX_ZOOM_MAX_WINDOW_COUNT = 12
     /** 贴边数量：系统手机默认 2 个，只放大不缩小，上限 10。 */
     const val DEFAULT_FLOAT_HANDLE_MAX_COUNT = 2
     const val MIN_FLOAT_HANDLE_MAX_COUNT = 2

@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Shader
 import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
@@ -21,6 +23,9 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import java.util.Locale
+
+/** 滚动条左右两端渐隐的宽度（dp）：窄屏上按可视宽度的 1/2 再收。 */
+private const val STATUS_TICKER_EDGE_FADE_DP = 10f
 
 /**
  * 融入状态栏的滚动通知组件（类似 lyricon 的状态栏歌词）。
@@ -116,6 +121,13 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
             textWidth = if (text.isEmpty()) 0f else paint.measureText(text)
         }
 
+        /** 渐隐遮罩缓存：只在宽度/两端渐隐宽度/文字颜色变化时重建。 */
+        private var fadeShader: Shader? = null
+        private var fadeShaderViewWidth = -1
+        private var fadeShaderLeft = -1f
+        private var fadeShaderRight = -1f
+        private var fadeShaderColor = 0
+
         override fun onDraw(canvas: Canvas) {
             if (text.isEmpty()) return
             val metrics = paint.fontMetrics
@@ -127,8 +139,66 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
                 (width - paddingRight).toFloat(),
                 height.toFloat(),
             )
+            // 两端渐隐只加在文字本身：文字从右缘淡入、向左缘淡出，
+            // 到了边界不再被硬切一刀。
+            val shader = edgeFadeShader()
+            if (shader != null) paint.shader = shader
             canvas.drawText(text, paddingLeft + offsetX, baseline, paint)
+            if (shader != null) paint.shader = null
             canvas.restore()
+        }
+
+        /**
+         * 两端渐隐遮罩：只在文字真的比可视区宽（也就是要滚）时才生效，
+         * 不滚的短通知保持原样，左对齐地整条显示。
+         *
+         * 用 paint 的 shader 而不是 saveLayer + DST_IN：省掉每帧一层离屏。
+         * 逐帧滚动是状态栏里的常驻动画，那一层开销不值得。
+         * 渐隐宽度全部来自 [HorizontalTickerMotion] 的纯数值计算（有 JVM 单测）：
+         * 左端随「已经滚出去多少」长出来，右端随「还剩多少伸出右界」收回去，
+         * 所以进场第一帧左端不淡、滚到最后一段右端也不淡。
+         */
+        private fun edgeFadeShader(): Shader? {
+            val left = paddingLeft.toFloat()
+            val right = (width - paddingRight).toFloat()
+            val clipWidth = right - left
+            if (clipWidth <= 0f) return null
+            if (!HorizontalTickerMotion.shouldScroll(textWidth, clipWidth)) return null
+            val maxFade = dp(STATUS_TICKER_EDGE_FADE_DP).toFloat()
+            val leftFade = HorizontalTickerMotion.leftFadeWidth(offsetX, clipWidth, maxFade)
+            val rightFade =
+                HorizontalTickerMotion.rightFadeWidth(offsetX, clipWidth, textWidth, maxFade)
+            if (leftFade <= 0f && rightFade <= 0f) return null
+            val color = paint.color
+            if (fadeShader != null && fadeShaderViewWidth == width &&
+                fadeShaderLeft == leftFade && fadeShaderRight == rightFade &&
+                fadeShaderColor == color
+            ) {
+                return fadeShader
+            }
+            // 同色透明：渐隐只改透明度，不改文字颜色（时钟颜色变化时会重建）。
+            val clear = color and 0x00FFFFFF
+            val colors = intArrayOf(
+                if (leftFade > 0f) clear else color,
+                color,
+                color,
+                if (rightFade > 0f) clear else color,
+            )
+            val shader = LinearGradient(
+                left,
+                0f,
+                right,
+                0f,
+                colors,
+                HorizontalTickerMotion.fadeStopOffsets(clipWidth, leftFade, rightFade),
+                Shader.TileMode.CLAMP,
+            )
+            fadeShader = shader
+            fadeShaderViewWidth = width
+            fadeShaderLeft = leftFade
+            fadeShaderRight = rightFade
+            fadeShaderColor = color
+            return shader
         }
     }
 

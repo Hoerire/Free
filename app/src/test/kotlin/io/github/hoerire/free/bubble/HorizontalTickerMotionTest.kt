@@ -54,4 +54,56 @@ class HorizontalTickerMotionTest {
         assertTrue(HorizontalTickerMotion.isFinished(1, 1))
         assertTrue(HorizontalTickerMotion.isFinished(3, 2))
     }
+
+    @Test
+    fun `两端渐隐宽度不超过可视区的一半`() {
+        // 正常状态栏：10dp 的渐隐远小于可视区宽度的一半，原样返回
+        assertEquals(35f, HorizontalTickerMotion.maxEdgeFade(523f, 35f), 0.01f)
+        // 窄可视区：两边各让一半，不会整条发虚
+        assertEquals(30f, HorizontalTickerMotion.maxEdgeFade(60f, 35f), 0.01f)
+        assertEquals(0f, HorizontalTickerMotion.maxEdgeFade(0f, 35f), 0.01f)
+        assertEquals(0f, HorizontalTickerMotion.maxEdgeFade(523f, 0f), 0.01f)
+    }
+
+    @Test
+    fun `左端渐隐从零长出来`() {
+        // 起点：第一个字不淡
+        assertEquals(0f, HorizontalTickerMotion.leftFadeWidth(0f, 523f, 35f), 0.01f)
+        // 已经滚出去 12px：左端淡 12px
+        assertEquals(12f, HorizontalTickerMotion.leftFadeWidth(-12f, 523f, 35f), 0.01f)
+        // 滚得够远：封顶在最大渐隐宽度
+        assertEquals(35f, HorizontalTickerMotion.leftFadeWidth(-400f, 523f, 35f), 0.01f)
+        // 位移仍在起点右侧（异常输入）：不淡
+        assertEquals(0f, HorizontalTickerMotion.leftFadeWidth(20f, 523f, 35f), 0.01f)
+    }
+
+    @Test
+    fun `右端渐隐随文本收尾收窄`() {
+        // 起点：文本还伸出右界 300px，右端淡满
+        assertEquals(35f, HorizontalTickerMotion.rightFadeWidth(0f, 523f, 823f, 35f), 0.01f)
+        // 只剩 8px 伸出右界：右端只淡 8px
+        assertEquals(8f, HorizontalTickerMotion.rightFadeWidth(-292f, 523f, 823f, 35f), 0.01f)
+        // 最后一段完全在可视区内：右端不淡
+        assertEquals(0f, HorizontalTickerMotion.rightFadeWidth(-600f, 523f, 823f, 35f), 0.01f)
+    }
+
+    @Test
+    fun `渐隐遮罩的四个位置单调且落在 0 到 1 之间`() {
+        val normal = HorizontalTickerMotion.fadeStopOffsets(523f, 35f, 35f)
+        assertEquals(4, normal.size)
+        assertEquals(0f, normal[0], 0.0001f)
+        assertEquals(1f, normal[3], 0.0001f)
+        assertEquals(35f / 523f, normal[1], 0.0001f)
+        assertEquals(1f - 35f / 523f, normal[2], 0.0001f)
+        assertTrue(normal[1] < normal[2])
+
+        // 两端渐隐加起来超过可视区：各让一半，位置仍单调
+        val tight = HorizontalTickerMotion.fadeStopOffsets(40f, 30f, 30f)
+        assertEquals(0.5f, tight[1], 0.0001f)
+        assertEquals(0.5f, tight[2], 0.0001f)
+
+        // 非法宽度：给一组安全值，不抛异常
+        val degenerate = HorizontalTickerMotion.fadeStopOffsets(0f, 10f, 10f)
+        assertEquals(4, degenerate.size)
+    }
 }

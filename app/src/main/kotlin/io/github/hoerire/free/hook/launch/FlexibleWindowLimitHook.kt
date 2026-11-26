@@ -19,10 +19,18 @@ import io.github.hoerire.free.platform.coloros.BubbleDemotionGuard
  *
  * 三个类需同时放行，任一遗漏仍会按原厂黑名单拦截。
  *
- * ColorOS 17 另有一处缓存：FlexibleTaskController 在构造时把上限读进整数字段
- * （字段名 maxFlexibleTaskNum，出厂值 2），之后超限裁决直接用这个字段，不再回头问 getMaxWinNum。
- * 模块注入发生在服务构造之后，改返回值已经晚了，所以还要在裁决入口把字段改掉，
- * 见 installCachedLimitSync。
+ * ColorOS 17 的数量判据是两路取大（FlexibleTaskController#handleExceedLimitFlexibleTask）：
+ *
+ *     shouldChangeToFloatSize = max(0, allVisibleWindowSize - maxNum)
+ *                        与  max(0, flexibleTasks.size() - maxFlexibleTaskNum)  取大
+ *
+ * 前者由 [installEvictionCeilingRelief] 接管；后者由 getMaxFlexibleTaskNum 的覆盖给出设置值。
+ * 「总可见窗口上限」maxNum 来自 FlexibleWindowManagerService#getMaxWinNum(1)，本机为 4，
+ * 它把全屏任务、迷你窗、分屏选择都算进「可见数」。设置 ≤ 4 时两路恰好不冲突，
+ * 一旦拉到 5 以上，前一路就会替用户踢窗口——这就是「拉到 10 不生效」的真因。
+ *
+ * 另有一段历史路径 installCachedLimitSync（按名字改控制器里的 maxFlexibleTaskNum 字段）：
+ * 本机反编译确认该值已是局部变量，没有可改的字段，因此这段在 17 上是空转，保留仅为兼容旧固件。
  */
 internal class FlexibleWindowLimitHook(
     private val module: XposedModule,
@@ -35,13 +43,15 @@ internal class FlexibleWindowLimitHook(
         total += installOn(classLoader, CONTROLLER_CLASS)
         total += installOn(classLoader, UTILS_CLASS)
         val cached = installCachedLimitSync(classLoader)
+        val ceiling = installEvictionCeilingRelief(classLoader)
         // 用 ModuleLog.install：不受「详细日志」开关影响，开机每个进程只留这一行，
         // 厂商改了接口名也能从这里看出来。
-        ModuleLog.install("ZOOM_LIMIT_INSTALLED_" + total + "_" + cached)
+        ModuleLog.install("ZOOM_LIMIT_INSTALLED_" + total + "_cache" + cached + "_ceiling" + ceiling)
         // 开机那行常常随缓冲区轮转丢掉，第一次开小窗时再补一份完整小结。
         pendingReport =
             "ZOOM_LIMIT_SUMMARY_sdk" + android.os.Build.VERSION.SDK_INT +
-                "_hooks" + total + "_cache" + cached + "_" + installedSummary
+                "_hooks" + total + "_cache" + cached + "_ceiling" + ceiling +
+                "_" + installedSummary
     }
 
     /** 待补打的小结；首次命中任意小窗钩子时输出一次。 */
@@ -77,6 +87,7 @@ internal class FlexibleWindowLimitHook(
             // 注意：getMaxWinNum 是"总可见窗口上限"，系统的超限判定里
             // shouldChangeToFloatSize = max(0, allVisibleWindowSize - maxNum) 即由它计算。
             // 绝不能把它改成用户设置值——一个全屏应用 + 一个合规小窗就会立刻判定超限。
+            // 17 上放行它，改由 installEvictionCeilingRelief 在裁决入口就地抬参；
             // 该路径不能单独点名挂载它：isMaxNumGetter 的排除会因此失效。
             val isMaxNumLike = isMaxNumGetter(method)
             if (!isSupport && !isMaxNumLike) return@forEach
@@ -202,6 +213,76 @@ internal class FlexibleWindowLimitHook(
     }
 
     /**
+     * 让「小窗数量」只由设置值决定，而不是被系统的「总可见窗口上限」提前截断。
+     *
+     * 挂 [FlexibleTaskController#handleExceedLimitFlexibleTask]，参数固定为
+     * （allVisibleWindowSize, flexibleTasks, maxNum, maxFlexibleTaskNum, reason, currentTask）。
+     * 方法里的退场个数是
+     *
+     *     max(0, allVisibleWindowSize - maxNum)  与  flexibleTasks.size - maxFlexibleTaskNum  取大
+     *
+     * maxNum 是系统的「总可见窗口上限」（本机 4），把全屏任务、迷你窗、分屏选择一起算进
+     * 「可见数」。用户设置描述的是「同时能开几个普通小窗」，两者语义不同：设置 1~4 时
+     * 前一项恰好不触发，5 以上就会替用户踢窗口——「上限拉到 10 不生效」即由此而来。
+     *
+     * 这里只在调用前把 maxNum 抬到不低于当前可见数，让前一项恒为 0；数量完全交给
+     * maxFlexibleTaskNum（= 设置值 + 迷你窗数 + 过渡宽限，见 getMaxFlexibleTaskNum 的覆盖）。
+     * 只改这一个入参，系统的其它判定（谁该退、退到哪、动画、同包去重）一概不动。
+     */
+    private fun installEvictionCeilingRelief(classLoader: ClassLoader): Int {
+        val target =
+            try {
+                classLoader.loadClass(CONTROLLER_CLASS)
+            } catch (_: ClassNotFoundException) {
+                return 0
+            } catch (_: LinkageError) {
+                return 0
+            }
+        val method =
+            target.declaredMethods.firstOrNull { candidate ->
+                candidate.name == "handleExceedLimitFlexibleTask" &&
+                    candidate.parameterTypes.size == 6 &&
+                    candidate.parameterTypes[0] == Int::class.javaPrimitiveType &&
+                    candidate.parameterTypes[2] == Int::class.javaPrimitiveType
+            } ?: run {
+                // 零命中必须留下痕迹：厂商改名后「数量上限」会静默退回系统值。
+                ModuleLog.warn("ZOOM_LIMIT_CEILING_NO_METHOD_" + shortName(CONTROLLER_CLASS))
+                return 0
+            }
+        method.isAccessible = true
+        val hookId = "free.limit.ceiling." + method.name + "." + method.parameterCount
+        return runCatching {
+            module
+                .hook(method)
+                .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                .setId(hookId)
+                .intercept { chain ->
+                    val settings = configuration.snapshot
+                    if (!settings.zoomInteractionActive || environment?.isForegroundExcluded() == true) {
+                        return@intercept chain.proceed()
+                    }
+                    val visible = chain.getArg(0) as? Int ?: return@intercept chain.proceed()
+                    val maxNum = chain.getArg(2) as? Int ?: return@intercept chain.proceed()
+                    if (visible <= maxNum) return@intercept chain.proceed()
+                    val raised = Math.max(maxNum, visible)
+                    if (ceilingReported.compareAndSet(false, true)) {
+                        // 每个进程只报第一次：这条一旦出现，说明设置值确实被总可见上限压着了。
+                        ModuleLog.info(
+                            "ZOOM_LIMIT_CEILING_RAISED_" + maxNum + "_TO_" + raised +
+                                "_visible" + visible + "_limit" + settings.zoomMaxWindowCountEffective,
+                        )
+                    }
+                    val args = chain.args.toTypedArray()
+                    args[2] = raised
+                    chain.proceed(args)
+                }
+            1
+        }.onFailure {
+            ModuleLog.warn("ZOOM_LIMIT_CEILING_HOOK_FAILED_" + hookId, it)
+        }.getOrDefault(0)
+    }
+
+    /**
      * 上限类 getter：无参、返回 int、名字里带 max 且带 num/count。
      *
      * 排除宽高尺寸类（MAX_FLEXIBLE_TASK_WIDTH 那种），避免误改绘制参数。
@@ -222,7 +303,8 @@ internal class FlexibleWindowLimitHook(
         // 这里只改浮动上限，总可见上限保持系统默认。
         // 16 的数量判据就是 getMaxWinNum（2.2 版正是接管它才生效）；
         // 17 改成「总可见窗口上限」，把全屏任务也算进去，改它会让
-        // 「一个全屏应用 + 一个合规小窗」立刻判超限，所以 17 上必须放行。
+        // 「一个全屏应用 + 一个合规小窗」立刻判超限，所以 17 上不改它的返回值，
+        // 由 installEvictionCeilingRelief 只在超出裁决那一次抬参。
         if (name == "getmaxwinnum") return android.os.Build.VERSION.SDK_INT < 37
         if (!name.contains("max")) return false
         if (!name.contains("num") && !name.contains("count")) return false
@@ -257,6 +339,9 @@ internal class FlexibleWindowLimitHook(
     /** 控制器实例：从 updateTaskMaxNum 的钩子里记下来，供统计迷你窗数量用。 */
     @Volatile private var controllerRef: Any? = null
     private val cacheReported = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** 总可见上限被抬高的第一次：每个进程只报一次，避免超限裁决时刷屏。 */
+    private val ceilingReported = java.util.concurrent.atomic.AtomicBoolean(false)
 
     /**
      * 一次性把控制器里所有 max/num 相关的整数字段打出来。
