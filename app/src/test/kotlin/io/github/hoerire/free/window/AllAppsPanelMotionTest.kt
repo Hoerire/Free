@@ -25,7 +25,8 @@ class AllAppsPanelMotionTest {
     }
 
     @Test fun entryStartsInvisibleAndConvergesWithoutGrowingBeyondThePanel() {
-        assertEquals(AllAppsPanelMotion.Frame(0f, 0.3f), AllAppsPanelMotion.enter(0f))
+        // 底板与内容共用一个 alpha：起始完全透明，缩放只从 90% 起（不再有 30% 宽的白条）。
+        assertEquals(AllAppsPanelMotion.Frame(0f, 0.9f), AllAppsPanelMotion.enter(0f))
         var previous = AllAppsPanelMotion.enter(0f)
         for (millis in 1..1000) {
             val frame = AllAppsPanelMotion.enter(millis / 1000f)

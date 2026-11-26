@@ -150,8 +150,10 @@ internal class ColorOsAllAppsWindow(
             val initial = AllAppsPanelMotion.enter(0f)
             card.scaleX = initial.scale
             card.scaleY = initial.scale
+            // 底板起始也必须透明：早期版本把它硬写成 1f，30% 宽的底板先露出一条白，
+            // 去掉缩放后还会整块白闪一下。底板和内容共用同一组数值。
+            card.alpha = initial.alpha
             content.view.alpha = initial.alpha
-            card.alpha = 1f
             card.visibility = View.VISIBLE
             waitingForFirstFrame = false
             root.viewTreeObserver.removeOnPreDrawListener(firstFrame)
@@ -278,8 +280,9 @@ internal class ColorOsAllAppsWindow(
         if (closed) return@safely
         val elapsed = (SystemClock.uptimeMillis() - animationStart) / durationScale
         val frame = if (exiting) AllAppsPanelMotion.exit(elapsed / 1_000f) else AllAppsPanelMotion.enter(elapsed / 1_000f)
-        // 材质底色不参与入场渐变，只有内容淡入；避免暗色桌面透入后再变亮。
-        card.alpha = if (exiting) frame.alpha else 1f
+        // 入场时底板与内容同一条 alpha 一起淡入（底板不再恒为 1f），
+        // 退场时只有底板淡出、内容保持不透明。两个分支都跟随 a。
+        card.alpha = frame.alpha
         content.view.alpha = if (exiting) 1f else frame.alpha
         card.pivotX = card.width / 2f
         card.pivotY = card.height / 2f
