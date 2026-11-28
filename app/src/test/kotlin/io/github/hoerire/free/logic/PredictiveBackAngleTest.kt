@@ -15,24 +15,33 @@ class PredictiveBackAngleTest {
     }
 
     @Test
-    fun wholeSwipeAllowsThirtyDegrees() {
-        // 产品口径：垂直 90°、最高 120°（±30°）。
-        assertTrue(PredictiveBackAngle.isVertical(57.7f, 100f))
-        assertTrue(PredictiveBackAngle.isVertical(-57.7f, -100f))
+    fun wholeSwipeAllowsTwentyDegrees() {
+        // 整段门槛 20°：19.8° 放行，30° 拒绝。
+        assertTrue(PredictiveBackAngle.isVertical(36f, 100f))
+        assertTrue(PredictiveBackAngle.isVertical(-36f, -100f))
+        assertFalse(PredictiveBackAngle.isVertical(57.7f, 100f))
     }
 
     @Test
     fun recentDirectionIsStricter() {
-        // 最近走向收紧到 20°：25° 与 45° 的斜滑都算「斜滑」。
-        assertTrue(PredictiveBackAngle.isRecentVertical(36f, 100f))
-        assertFalse(PredictiveBackAngle.isRecentVertical(47f, 100f))
+        // 最近走向门槛 15°：14.5° 放行，19.8° 拒绝。
+        assertTrue(PredictiveBackAngle.isRecentVertical(25.8f, 100f))
+        assertFalse(PredictiveBackAngle.isRecentVertical(36f, 100f))
         assertFalse(PredictiveBackAngle.isRecentVertical(100f, 100f))
     }
 
     @Test
-    fun beyondThirtyDegreesIsRejectedForWholeSwipe() {
+    fun realMisTouchTrajectoryIsRejected() {
+        // 真机日志里斜划触发「更多」面板的那一帧：dx=-314 dy=550，整段 29°、最近 17~19°。
+        assertFalse(PredictiveBackAngle.isVertical(-314f, 550f))
+        assertEquals(29, PredictiveBackAngle.degreesFromVertical(-314f, 550f))
+    }
+
+    @Test
+    fun fortyFiveDegreeDiagonalIsRejected() {
         assertFalse(PredictiveBackAngle.isVertical(100f, 100f))
         assertFalse(PredictiveBackAngle.isVertical(-100f, 100f))
+        assertFalse(PredictiveBackAngle.isRecentVertical(-100f, 100f))
     }
 
     @Test

@@ -50,6 +50,15 @@ internal class PredictiveBackSwipeHook(
 
     private var downX = 0f
     private var downY = 0f
+
+    /**
+     * 竖向行程与角度的量测锚点。
+     *
+     * 起手前的边缘内滑、以及斜划里横向占优的那几段，都是「横向位移」：它们不该算进
+     * 竖向行程，更不该把角度带斜。遇到这样的采样段就把锚点挪到当前位置，只量真正的竖滑。
+     */
+    private var anchorX = 0f
+    private var anchorY = 0f
     private var lastX = 0f
     private var lastY = 0f
 
@@ -67,6 +76,9 @@ internal class PredictiveBackSwipeHook(
 
     private var lastIndex = 0
     private var lastDisplay = 0
+
+    /** 本次手势是否已经记过一行角度诊断（每个手势只记一次，避免刷日志）。 */
+    private var angleLogged = false
 
     /** 起手在屏幕左半边：打开面板时按这一侧选分组。 */
     private var leftEdge = true
@@ -127,6 +139,8 @@ internal class PredictiveBackSwipeHook(
         downY = (chain.getArg(1) as? Number)?.toFloat() ?: 0f
         lastX = downX
         lastY = downY
+        anchorX = downX
+        anchorY = downY
         recentDx = 0f
         recentDy = 0f
         sampleX = downX
@@ -167,12 +181,20 @@ internal class PredictiveBackSwipeHook(
         if (fired || !armed) return
         val snapshot = configuration.snapshot
         val threshold = snapshot.predictiveBackSwipeDistanceDpEffective * density
-        val delta = y - downY
-        // 每 [SAMPLE_MS] 记一段走向；纵向位移太小（< 6dp）的不更新，避免抖动被当成斜滑。
+        // 每 [SAMPLE_MS] 记一段走向，并处理横向占优的段：
+        // 边缘内滑的尾巴（以及斜划的横向部分）是横向的，既不该算进竖向行程，也不该把角度带斜。
+        // 原先从 downX/downY 一直量到底，拉得越长锚点越靠边，就必须拿更长的竖向行程去「稀释」
+        // 那段横向位移才能过角度闸——表现就是 50dp 要拉出三四倍的竖直距离才触发。
         val now = android.os.SystemClock.uptimeMillis()
         if (now - sampleAt >= SAMPLE_MS) {
             val sx = x - sampleX
             val sy = y - sampleY
+            if (kotlin.math.abs(sx) >= MIN_SAMPLE_DP * density &&
+                kotlin.math.abs(sx) > HORIZONTAL_LEAD_FACTOR * kotlin.math.abs(sy)
+            ) {
+                anchorX = x
+                anchorY = y
+            }
             if (kotlin.math.abs(sy) >= MIN_SAMPLE_DP * density) {
                 recentDx = sx
                 recentDy = sy
@@ -181,6 +203,8 @@ internal class PredictiveBackSwipeHook(
             sampleY = y
             sampleAt = now
         }
+        // 竖向行程只从锚点算：横滑段已经被移出。
+        val delta = y - anchorY
         // 上滑单独用更短的阈值：内滑后手腕已内旋，再上抬要先克服这个角度，
         // 同样的物理行程体感更远。下拉沿用设置值。
         val up = threshold * UPWARD_FACTOR
@@ -210,12 +234,26 @@ internal class PredictiveBackSwipeHook(
         // 两条都要过：整段位移的方向（起点 → 当前）与**最近一小段**的方向。
         // 只看整段时，斜着起手、后段转正的轨迹会被累计角度「洗白」，实测就是这么误触的。
         if (delta >= threshold) {
-            val totalDx = x - downX
-            val totalDy = y - downY
+            val totalDx = x - anchorX
+            val totalDy = y - anchorY
             val totalOk = PredictiveBackAngle.isVertical(totalDx, totalDy)
+            // 必须有真实的走向采样才放行：原先「recentDy 还是 0 就跳过最近走向」的写法，
+            // 会让一次快速斜划在第一个越阈值的 MOVE 上直接过闸——这正是 45° 斜滑能触发的原因。
             val recentOk =
-                recentDy == 0f || PredictiveBackAngle.isRecentVertical(recentDx, recentDy)
+                recentDy != 0f && PredictiveBackAngle.isRecentVertical(recentDx, recentDy)
             if (!totalOk || !recentOk) {
+                if (!angleLogged) {
+                    angleLogged = true
+                    ModuleLog.raw(
+                        android.util.Log.INFO,
+                        "PREDICTIVE_BACK_REJECT_DOWN_t" +
+                            PredictiveBackAngle.degreesFromVertical(totalDx, totalDy) +
+                            "_r" + PredictiveBackAngle.degreesFromVertical(recentDx, recentDy) +
+                            "_dx" + totalDx.toInt() + "_dy" + totalDy.toInt() +
+                            "_s" + (if (recentDy != 0f) 1 else 0),
+                        null,
+                    )
+                }
                 if (VerboseLog.enabled) {
                     ModuleLog.debug("Free") {
                         "PREDICTIVE_BACK_ANGLE_REJECT_t" +
@@ -243,6 +281,19 @@ internal class PredictiveBackSwipeHook(
         }
         fired = true
         armed = false
+        // 诊断（定位 45° 误触用，确认后删）：真机日志里能直接看到这次下拉的实际角度。
+        if (action == ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL) {
+            val dx = lastX - downX
+            val dy = lastY - downY
+            ModuleLog.raw(
+                android.util.Log.INFO,
+                "PREDICTIVE_BACK_FIRE_MORE_t" +
+                    PredictiveBackAngle.degreesFromVertical(dx, dy) +
+                    "_r" + PredictiveBackAngle.degreesFromVertical(recentDx, recentDy) +
+                    "_dx" + dx.toInt() + "_dy" + dy.toInt(),
+                null,
+            )
+        }
         sendBroadcast(action) { intent ->
             if (action == ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL) {
                 intent.putExtra(ModulePreferences.EXTRA_GESTURE_SIDE, leftEdge)
@@ -306,6 +357,7 @@ internal class PredictiveBackSwipeHook(
     private fun resetGesture() {
         armed = false
         fired = false
+        angleLogged = false
         recentDx = 0f
         recentDy = 0f
     }
@@ -330,6 +382,16 @@ internal class PredictiveBackSwipeHook(
 
         /** 采样段的最小纵向位移（dp）：太小的抖动不参与方向判定。 */
         const val MIN_SAMPLE_DP = 6f
+
+        /**
+         * 横向占优的判据：最近一段的 |dx| 超过 |dy| 的这个倍数，就认为这一段是横滑
+         *（边缘内滑的尾巴 / 斜划的横向部分），把量测锚点挪过去、不计入竖向行程。
+         * 取 0.8：只要横向占比接近竖向（≥0.8，约 39° 以外）就仍算「还在往外拉」，
+         * 把这一段从竖向行程里剔除。45° 斜划的比值是 1.0，每一段都会被剔除——竖向永远攒不够，
+         * 所以斜划依旧触发不了；而正常「拉出来再竖直下拉」会从拉完那一刻起重新计距，
+         * 50dp 就是 50dp，不会再被前面那段横向位移「稀释」。
+         */
+        const val HORIZONTAL_LEAD_FACTOR = 0.8f
 
         const val ACTION_DOWN = 0
         const val ACTION_UP = 1

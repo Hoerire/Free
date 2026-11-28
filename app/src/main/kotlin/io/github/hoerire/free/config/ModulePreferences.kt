@@ -170,11 +170,12 @@ internal object ModulePreferences {
     /**
      * 触发用的滑动距离（dp）：边缘内滑后上滑或下拉超过这个距离才执行动作。
      *
-     * 默认 100dp：实测比 56dp 更容易判准，手指不必刻意拉很短；下限 16dp 保证还能和抖动分开，
+     * 默认 50dp：现在竖向距离只从「拉出来之后」开始算，50dp 就是 50dp，
+     * 手感比过去从手势起点累计时要直接；下限 16dp 保证还能和抖动分开，
      * 上限 200dp 让手上留有余量而不至于要拉满半屏。
      */
     const val KEY_PREDICTIVE_BACK_SWIPE_DISTANCE_DP = "predictive_back_swipe_distance_dp_v1"
-    const val DEFAULT_PREDICTIVE_BACK_SWIPE_DISTANCE_DP = 100
+    const val DEFAULT_PREDICTIVE_BACK_SWIPE_DISTANCE_DP = 50
     const val MIN_PREDICTIVE_BACK_SWIPE_DISTANCE_DP = 16
     const val MAX_PREDICTIVE_BACK_SWIPE_DISTANCE_DP = 200
 

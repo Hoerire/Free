@@ -176,7 +176,7 @@
     <string name="mini_long_press_summary">长按迷你窗静音，再长按恢复</string>
     <string name="predictive_back_title">侧滑扩展</string>
     <string name="predictive_back_enable_title">启用侧滑扩展</string>
-    <string name="predictive_back_summary">边缘内滑后按手势模式执行动作；不动或滑回去都算取消</string>
+    <string name="predictive_back_summary">轻滑后上下滑动触发指定手势；不动或滑回去都算取消</string>
     <string name="predictive_back_mode_title">手势模式</string>
     <string name="predictive_back_mode_summary">内滑之后往哪个方向滑、执行什么动作</string>
     <string name="predictive_back_mode_both">上滑切窗 · 下滑更多</string>
