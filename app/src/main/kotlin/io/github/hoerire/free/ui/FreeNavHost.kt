@@ -318,6 +318,7 @@ internal fun FreeNavHost(
                     onHandleSwipeUpToMiniEnabledChange = onHandleSwipeUpToMiniEnabledChange,
                     onLongPressMuteChange = onLongPressMuteChange,
                     onOutsideTapCloseModeChange = onOutsideTapCloseModeChange,
+                    onEdgeDragFullScreenChange = onEdgeDragFullScreenChange,
                 )
             AppRoute.SystemEnhance ->
                 SystemEnhanceScreen(
@@ -325,7 +326,6 @@ internal fun FreeNavHost(
                     onBack = popBackStack,
                     onExternalHandleEnabledChange = onExternalHandleEnabledChange,
                     onNavigateToDragUnlock = navigateToDragUnlock,
-                    onEdgeDragFullScreenChange = onEdgeDragFullScreenChange,
                     onStatusScrollEnabledChange = onStatusScrollEnabledChange,
                     onStatusScrollRoundsChange = onStatusScrollRoundsChange,
                     onStatusScrollSpeedChange = onStatusScrollSpeedChange,

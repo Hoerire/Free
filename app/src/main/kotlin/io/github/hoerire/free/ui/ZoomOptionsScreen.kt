@@ -165,6 +165,7 @@ internal fun ZoomOptionsScreen(
                     enabled = sub,
                     description = stringResource(R.string.zoom_landscape_side_summary),
                 )
+
                 // 手势交互收成一行入口，具体开关在二级页里；summary 只列条目名。
                 ArrowPreference(
                     title = stringResource(R.string.zoom_group_gesture_title),

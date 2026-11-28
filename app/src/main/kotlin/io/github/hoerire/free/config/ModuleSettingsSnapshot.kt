@@ -241,8 +241,9 @@ internal data class ModuleSettingsSnapshot(
     /** 内容拖拽属于「系统增强」，只跟模块总开关走；名单为空即关。 */
     val dragUnlockActive: Boolean get() = enabled && dragUnlockPackages.isNotEmpty()
 
-    /** 边缘拖动属于「系统增强」，只跟模块总开关走。 */
-    val edgeDragFullScreenActive: Boolean get() = enabled && edgeDragFullScreen
+    /** 边缘拖动属于「小窗交互」，与小窗总闸一起开关。 */
+    val edgeDragFullScreenActive: Boolean
+        get() = zoomInteractionActive && edgeDragFullScreen
 
     /** 气泡通知是否生效：模块总开关 ×「气泡通知」。 */
     val bubbleActive: Boolean get() = enabled && bubbleEnabled

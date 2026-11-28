@@ -3,6 +3,7 @@ package io.github.hoerire.free.ui
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PictureInPicture
+import androidx.compose.material.icons.rounded.SwipeRight
 import androidx.compose.material.icons.rounded.SwipeUp
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.runtime.Composable
@@ -28,6 +29,7 @@ internal fun GestureScreen(
     onBack: () -> Unit,
     onHandleSwipeUpToMiniEnabledChange: (Boolean) -> Unit,
     onLongPressMuteChange: (Boolean) -> Unit,
+    onEdgeDragFullScreenChange: (Boolean) -> Unit,
     onOutsideTapCloseModeChange: (OutsideTapCloseMode) -> Unit,
 ) {
     // 小窗交互总闸关掉时整页灰掉：这些项都只在小窗链路上生效。
@@ -53,6 +55,15 @@ internal fun GestureScreen(
                     summary = stringResource(R.string.handle_swipe_up_to_mini_summary),
                     enabled = enabled,
                     startAction = { PreferenceIcon(Icons.Rounded.SwipeUp, enabled) },
+                )
+                // 边缘拖动：小窗左右边向外拉一点、松手变全屏。属于「拖动」类手势。
+                SwitchPreference(
+                    checked = state.settings.edgeDragFullScreen,
+                    onCheckedChange = onEdgeDragFullScreenChange,
+                    title = stringResource(R.string.edge_drag_title),
+                    summary = stringResource(R.string.edge_drag_summary),
+                    enabled = enabled,
+                    startAction = { PreferenceIcon(Icons.Rounded.SwipeRight, enabled) },
                 )
                 SwitchPreference(
                     checked = state.settings.longPressMuteEnabled,

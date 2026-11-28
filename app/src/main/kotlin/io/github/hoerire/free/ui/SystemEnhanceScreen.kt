@@ -52,7 +52,6 @@ internal fun SystemEnhanceScreen(
     onBack: () -> Unit,
     onExternalHandleEnabledChange: (Boolean) -> Unit,
     onNavigateToDragUnlock: () -> Unit,
-    onEdgeDragFullScreenChange: (Boolean) -> Unit,
     onStatusScrollEnabledChange: (Boolean) -> Unit,
     onStatusScrollRoundsChange: (Int) -> Unit,
     onStatusScrollSpeedChange: (Int) -> Unit,
@@ -107,17 +106,7 @@ internal fun SystemEnhanceScreen(
                                 enabled = enabled,
                                 startAction = { PreferenceIcon(Icons.Rounded.UnfoldMore, enabled) },
                             )
-                            // 边缘拖动：小窗拖到左右边缘变全屏。单一开关、没有参数，留在总览页。
-                            SwitchPreference(
-                                checked = state.settings.edgeDragFullScreen,
-                                onCheckedChange = onEdgeDragFullScreenChange,
-                                title = stringResource(R.string.edge_drag_title),
-                                summary = stringResource(R.string.edge_drag_summary),
-                                enabled = enabled,
-                                startAction = {
-                                    PreferenceIcon(Icons.Rounded.SwipeRight, enabled)
-                                },
-                            )
+
                             // 内容拖拽：按应用开启，默认关闭。全局补配置会让部分机型/应用
                             // 在 bind 阶段崩溃，所以参数（生效应用名单）放进二级页。
                             ArrowPreference(
