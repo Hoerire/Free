@@ -77,9 +77,6 @@ internal class PredictiveBackSwipeHook(
     private var lastIndex = 0
     private var lastDisplay = 0
 
-    /** 本次手势是否已经记过一行角度诊断（每个手势只记一次，避免刷日志）。 */
-    private var angleLogged = false
-
     /** 起手在屏幕左半边：打开面板时按这一侧选分组。 */
     private var leftEdge = true
 
@@ -242,18 +239,6 @@ internal class PredictiveBackSwipeHook(
             val recentOk =
                 recentDy != 0f && PredictiveBackAngle.isRecentVertical(recentDx, recentDy)
             if (!totalOk || !recentOk) {
-                if (!angleLogged) {
-                    angleLogged = true
-                    ModuleLog.raw(
-                        android.util.Log.INFO,
-                        "PREDICTIVE_BACK_REJECT_DOWN_t" +
-                            PredictiveBackAngle.degreesFromVertical(totalDx, totalDy) +
-                            "_r" + PredictiveBackAngle.degreesFromVertical(recentDx, recentDy) +
-                            "_dx" + totalDx.toInt() + "_dy" + totalDy.toInt() +
-                            "_s" + (if (recentDy != 0f) 1 else 0),
-                        null,
-                    )
-                }
                 if (VerboseLog.enabled) {
                     ModuleLog.debug("Free") {
                         "PREDICTIVE_BACK_ANGLE_REJECT_t" +
@@ -281,19 +266,6 @@ internal class PredictiveBackSwipeHook(
         }
         fired = true
         armed = false
-        // 诊断（定位 45° 误触用，确认后删）：真机日志里能直接看到这次下拉的实际角度。
-        if (action == ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL) {
-            val dx = lastX - downX
-            val dy = lastY - downY
-            ModuleLog.raw(
-                android.util.Log.INFO,
-                "PREDICTIVE_BACK_FIRE_MORE_t" +
-                    PredictiveBackAngle.degreesFromVertical(dx, dy) +
-                    "_r" + PredictiveBackAngle.degreesFromVertical(recentDx, recentDy) +
-                    "_dx" + dx.toInt() + "_dy" + dy.toInt(),
-                null,
-            )
-        }
         sendBroadcast(action) { intent ->
             if (action == ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL) {
                 intent.putExtra(ModulePreferences.EXTRA_GESTURE_SIDE, leftEdge)
@@ -357,7 +329,6 @@ internal class PredictiveBackSwipeHook(
     private fun resetGesture() {
         armed = false
         fired = false
-        angleLogged = false
         recentDx = 0f
         recentDy = 0f
     }
