@@ -288,7 +288,11 @@ internal class ModuleEnvironmentState(
         val resolver = context?.contentResolver ?: return
         try {
             gameModeActive = Settings.Global.getInt(resolver, GAME_MODE_KEY, 0) == 1
-            gestureNavigation = Settings.Secure.getInt(resolver, NAVIGATION_MODE_KEY, -1) == 2
+            // 支持手势导航(2)与三键导航(0)：三键模式下底部导航栏由
+            // bottomGestureInsetPx() 让出（读 navigation_bar_height），角区落在它上方，
+            // 不会挡住返回/桌面/多任务键。
+            gestureNavigation =
+                Settings.Secure.getInt(resolver, NAVIGATION_MODE_KEY, -1).let { it == 2 || it == 0 }
         } catch (exception: RuntimeException) {
             gameModeActive = true
             gestureNavigation = false

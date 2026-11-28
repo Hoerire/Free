@@ -134,6 +134,8 @@ internal class ColorOsAllAppsContent(loader: ClassLoader, target: ColorOsSidebar
     }
 
     fun bindAdapter(adapter: Any, onClick: (Boolean, () -> Unit) -> Unit) {
+        // 每次打开面板都要重新校正一次标题（对象可能被复用）。
+        titlesRenamed = false
         panelLog(
             "PANEL_BIND " + adapter.javaClass.simpleName +
                 " count=" + runCatching { adapter.javaClass.getMethod("getItemCount").invoke(adapter) }.getOrNull(),
@@ -560,30 +562,42 @@ internal class ColorOsAllAppsContent(loader: ClassLoader, target: ColorOsSidebar
 
 
 
+    /**
+     * 分组标题：数据层的标题在某些布局里不会直接渲染（横屏尤其明显），
+     * 原生两段标题文本都是「工具」，所以按**屏幕纵坐标**取前两个标题 View 改写：
+     * 第一个「收藏」、第二个「最近」，第三个（原生工具组）保持「工具」。
+     *
+     * - 只在面板打开后的头几秒重试，改成一次就置位，之后不再改名：
+     *   滚动会回收标题行，再改名就会把「最近」误改成「收藏」（曾出现 收藏/收藏）。
+     * - 至少找到两个标题才动手：只看到一个时不猜，避免把唯一一个改成「收藏」。
+     */
+    private var titlesRenamed = false
+
     private fun scheduleTitleRename() {
+        if (titlesRenamed) return
         val handler = android.os.Handler(android.os.Looper.getMainLooper())
-        listOf(0L, 120L, 400L, 900L, 1600L).forEach { delay ->
+        listOf(0L, 120L, 400L, 900L, 1600L, 2600L).forEach { delay ->
             handler.postDelayed({ renameGroupTitles() }, delay)
         }
     }
 
-
-
-    /**
-     * 分组标题按出现顺序命名：第一个「收藏」，第二个「最近」。
-     *
-     * 标题行的文案由布局里的固定字符串决定（都是「工具」），按文本改名会把两个都改成收藏，
-     * 所以这里按顺序取前两个标题 TextView 直接赋文本。
-     *
-     * 方法会被多个延迟点重复调用（面板展开、数据灌入的时间窗不确定）；标题已改写的轮次
-     * 只做一次文本比较就返回，不产生日志。
-     */
-    private fun renameGroupTitles() {
-        if (closed) return
+    private fun renameGroupTitles(requirePair: Boolean = false) {
+        if (closed || titlesRenamed) return
         runCatching {
             val found = ArrayList<android.widget.TextView>()
             collectTitles(view, GROUP_TITLE_LABELS, found)
             if (found.isEmpty()) return
+            val location = IntArray(2)
+            found.sortWith { a, b ->
+                a.getLocationOnScreen(location)
+                val ay = location[1]
+                b.getLocationOnScreen(location)
+                val by = location[1]
+                if (ay != by) ay.compareTo(by) else 0
+            }
+            // 竖屏时第二段标题常常还没布局出来：先改第一段为「收藏」，
+            // 等两段都就位再把第二段改成「最近」，全部完成才置位停止重试。
+            if (requirePair && found.size < 2) return
             var renamed = 0
             if (found[0].text?.toString() != GROUP_TITLE_PINNED) {
                 found[0].text = GROUP_TITLE_PINNED
@@ -592,6 +606,7 @@ internal class ColorOsAllAppsContent(loader: ClassLoader, target: ColorOsSidebar
             if (found.size > 1 && found[1].text?.toString() != GROUP_TITLE_RECENT) {
                 found[1].text = GROUP_TITLE_RECENT
                 renamed++
+                titlesRenamed = true
             }
             if (renamed > 0) panelLog("PANEL_TITLES_RENAMED_" + renamed)
         }
@@ -673,6 +688,14 @@ internal class ColorOsAllAppsContent(loader: ClassLoader, target: ColorOsSidebar
 
     fun mode(): AllAppsPanelGeometry.Mode = when {
         isTabletop.call(resource, false) == true -> AllAppsPanelGeometry.Mode.Tabletop
+        // 优先用本进程的 Configuration 判横竖：侧边栏那几个 isLandscape/isPortrait
+        // 反射调用在横屏下会给出竖屏结果，面板就按竖屏高度展开、底部被屏幕截断。
+        context.resources.configuration.orientation ==
+            android.content.res.Configuration.ORIENTATION_LANDSCAPE ->
+            AllAppsPanelGeometry.Mode.Landscape
+        context.resources.configuration.orientation ==
+            android.content.res.Configuration.ORIENTATION_PORTRAIT ->
+            AllAppsPanelGeometry.Mode.Portrait
         isLandscape.call(resource) == true -> AllAppsPanelGeometry.Mode.Landscape
         isPortrait.call(resource) == true -> AllAppsPanelGeometry.Mode.Portrait
         else -> AllAppsPanelGeometry.Mode.LargePortrait
