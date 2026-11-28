@@ -199,6 +199,65 @@ internal class ColorOsFreeformCoordinator(
             }
         }
 
+    /** 「更多」面板点中当前前台应用：侧边栏进程拦下原生启动，改由这里原地切小窗。 */
+    private val panelSwitchZoomReceiver =
+        object : BroadcastReceiver() {
+            override fun onReceive(receiverContext: Context?, intent: Intent?) {
+                if (intent?.action == ModulePreferences.ACTION_PANEL_OPEN_NATIVE) {
+                    if (!isSidebarSender(sentFromUid)) {
+                        logger(Log.WARN, "SYSTEM_PANEL_NATIVE_FOREIGN_SENDER_" + sentFromUid, null)
+                        return
+                    }
+                    handler.post {
+                        if (!sidebar.openNativePanel()) {
+                            debug("SYSTEM_PANEL_OPEN_NATIVE_FAILED")
+                        }
+                    }
+                    return
+                }
+                if (intent?.action != ModulePreferences.ACTION_PANEL_SWITCH_ZOOM) return
+                if (!isSidebarSender(sentFromUid)) {
+                    logger(Log.WARN, "SYSTEM_PANEL_ZOOM_FOREIGN_SENDER_" + sentFromUid, null)
+                    return
+                }
+                val packageName =
+                    intent.getStringExtra(ModulePreferences.EXTRA_PANEL_SWITCH_ZOOM_PACKAGE)
+                        ?: return
+                handler.post {
+                    val tasks = taskSnapshot()
+                    if (switchFocusedFullscreenToZoom(tasks, packageName)) {
+                        logger(Log.INFO, "SYSTEM_PANEL_SWITCH_TO_ZOOM_" + packageName, null)
+                    } else {
+                        // 已经不在全屏（或正在切）时不插队：这一次点击就当无事发生。
+                        logger(Log.WARN, "SYSTEM_PANEL_SWITCH_TO_ZOOM_SKIPPED_" + packageName, null)
+                    }
+                }
+            }
+        }
+
+    @Volatile
+    private var sidebarUid = -2
+
+    private fun isSidebarSender(uid: Int): Boolean {
+        if (uid < 0) return false
+        if (uid == android.os.Process.SYSTEM_UID || uid == moduleUid()) return true
+        val cached = sidebarUid
+        if (cached != -2) return uid == cached
+        val resolved =
+            try {
+                context.packageManager
+                    .getApplicationInfo(
+                        "com.coloros.smartsidebar",
+                        android.content.pm.PackageManager.ApplicationInfoFlags.of(0),
+                    )
+                    .uid
+            } catch (_: RuntimeException) {
+                -1
+            }
+        sidebarUid = resolved
+        return uid == resolved
+    }
+
     @Volatile
     private var systemUiUid = -2
 
@@ -1358,8 +1417,33 @@ internal class ColorOsFreeformCoordinator(
         }
     }
 
+    /**
+     * 把「面板打开这一刻的前台应用」广播给侧边栏进程。
+     *
+     * 侧边栏进程没有 GET_TASKS，自己查不到当前前台是谁；面板点击时用它判断
+     * 「点的是不是当前应用」，是就改成原地变小窗。
+     */
+    private fun announcePanelFocus() {
+        val packageName =
+            runCatching {
+                val tasks = tasksOfFocusedDisplay()
+                val focused = tasks?.firstOrNull { isTaskFocused(it) && isTaskVisible(it) }
+                focused?.let { packageOfTask(it) }
+            }.getOrNull()
+        runCatching {
+            context.sendBroadcast(
+                Intent(ModulePreferences.ACTION_PANEL_FOCUS).putExtra(
+                    ModulePreferences.EXTRA_PANEL_FOCUS_PACKAGE,
+                    packageName ?: "",
+                ),
+            )
+        }
+        debug("SYSTEM_PANEL_FOCUS_" + (packageName ?: "none"))
+    }
+
     override fun onMorePanelRequested() {
         debug("SYSTEM_MORE_PANEL_REQUESTED")
+        announcePanelFocus()
         // 「更多」面板按最新的最近任务重排（扇形本身不使用最近任务）。
         refreshPanelRecents()
         if (!isGestureEnvironmentAllowed()) {
@@ -2082,6 +2166,19 @@ internal class ColorOsFreeformCoordinator(
             debug("SYSTEM_PREDICTIVE_BACK_OBSERVER_READY")
         } catch (exception: RuntimeException) {
             logger(Log.WARN, "SYSTEM_PREDICTIVE_BACK_OBSERVER_UNAVAILABLE", exception)
+        }
+        try {
+            context.registerReceiver(
+                panelSwitchZoomReceiver,
+                android.content.IntentFilter().apply {
+                    addAction(ModulePreferences.ACTION_PANEL_SWITCH_ZOOM)
+                    addAction(ModulePreferences.ACTION_PANEL_OPEN_NATIVE)
+                },
+                Context.RECEIVER_EXPORTED,
+            )
+            debug("SYSTEM_PANEL_ZOOM_OBSERVER_READY")
+        } catch (exception: RuntimeException) {
+            logger(Log.WARN, "SYSTEM_PANEL_ZOOM_OBSERVER_UNAVAILABLE", exception)
         }
     }
 

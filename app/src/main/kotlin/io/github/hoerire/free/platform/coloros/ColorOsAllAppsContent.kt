@@ -198,6 +198,98 @@ internal class ColorOsAllAppsContent(loader: ClassLoader, target: ColorOsSidebar
                         // 系统的应用表里，按位置分发会找不到；工具走它自己的 handle()，
                         // 快捷方式按 pkg/activity 拉起。
                         if (data == null || itemType(item) == 0) {
+                            // 「最近文件」只认侧边栏自己的入口：模块进程里调它的 handle() 没反应，
+                            // 交回系统自己的点击分发，由侧边栏进程打开。
+                            if (alias?.toString() == "recent_files") {
+                                // 「最近文件」是原生主面板里的「文件袋」内嵌视图，在「更多」面板里
+                                // 没有可打开的落点（连原生点击都没反应）。收起面板，唤出原生侧边栏，
+                                // 文件袋就在那里。
+                                panelLog("PANEL_RECENT_FILES_VIA_SIDEBAR")
+                                onClick(false) {
+                                    // 原生链路（logcat 实测）：系统调 IUiProcessHandler.showScalePanelFromRect，
+                                    // 真正干活的是同进程的 ViewDataHandlerImpl.INSTANCE.showScalePanelFromRect(
+                                    //   float, SingleStateType, boolean showing, Rect barRect, int maskColor)。
+                                    // 我们就在这个进程里，直接 reflective 调它，等于把主面板拉起来。
+                                    runCatching {
+                                        val loader = context.classLoader
+                                        val handlerClass = loader.loadClass(
+                                            "com.oplus.smartsidebar.panelview.edgepanel.data.viewdatahandlers.ViewDataHandlerImpl",
+                                        )
+                                        val instance = handlerClass.getField("INSTANCE").get(null)
+                                        val state = loader
+                                            .loadClass("com.oplus.smartsidebar.aidl.SingleStateType")
+                                            .getField("PANEL_SHOW_STATE")
+                                            .get(null)
+                                        val metrics = context.resources.displayMetrics
+                                        val bar = android.graphics.Rect(
+                                            metrics.widthPixels - metrics.widthPixels / 32,
+                                            0,
+                                            metrics.widthPixels,
+                                            metrics.heightPixels,
+                                        )
+                                        // showScalePanelFromRect 挂在 AIDL stub 的匿名类上，反射找不到；
+                                        // 它最终落到的就是下面这个带默认参数的实现（反编译里 stub 的原样调用）。
+                                        val method = handlerClass.getDeclaredMethod(
+                                            "showOrCloseUserPanel\$default",
+                                            handlerClass,
+                                            Boolean::class.javaPrimitiveType,
+                                            state.javaClass,
+                                            java.lang.Float::class.java,
+                                            android.graphics.Rect::class.java,
+                                            java.lang.Integer::class.java,
+                                            java.lang.Float::class.java,
+                                            java.lang.Integer::class.java,
+                                            java.lang.Float::class.java,
+                                            Long::class.javaPrimitiveType,
+                                            Boolean::class.javaPrimitiveType,
+                                            Int::class.javaPrimitiveType,
+                                            Any::class.java,
+                                        ).apply { isAccessible = true }
+                                        method.invoke(
+                                            null,
+                                            instance,
+                                            true,
+                                            state,
+                                            java.lang.Float.valueOf(1.0f),
+                                            bar,
+                                            java.lang.Integer.valueOf(0),
+                                            null,
+                                            null,
+                                            null,
+                                            0L,
+                                            false,
+                                            992,
+                                            null,
+                                        )
+                                        panelLog("PANEL_MAIN_SHOW_CALLED")
+                                        // 主面板起来后，按原生点「最近文件」的落点重放那一下：
+                                        // UserPanelView.onItemClick 命中 RECENT_FILES_ALIAS 时最终调的就是
+                                        // userPanelRecentFiles(true)，这里直接拿面板实例调它。
+                                        val main = android.os.Handler(android.os.Looper.getMainLooper())
+                                        listOf(900L, 1400L, 1900L, 2400L).forEach { delay ->
+                                            main.postDelayed({
+                                                runCatching {
+                                                    val inst = handlerClass.getField("INSTANCE").get(null)
+                                                    val panelMain = handlerClass
+                                                        .getMethod("getMPanelMainView").invoke(inst)
+                                                        ?: return@postDelayed
+                                                    val userPanel = panelMain.javaClass
+                                                        .getMethod("getMPanel").invoke(panelMain)
+                                                        ?: return@postDelayed
+                                                    userPanel.javaClass.getMethod(
+                                                        "userPanelRecentFiles",
+                                                        Boolean::class.javaPrimitiveType,
+                                                    ).invoke(userPanel, true)
+                                                    panelLog("PANEL_RECENT_FILES_SHOW_CALLED_" + delay)
+                                                }.onFailure {
+                                                    panelLog("PANEL_RECENT_FILES_SHOW_FAILED_" + it.message)
+                                                }
+                                            }, delay)
+                                        }
+                                    }.onFailure { panelLog("PANEL_MAIN_SHOW_FAILED_" + it.message) }
+                                }
+                                return@newProxyInstance nativeUnit
+                            }
                             // 工具（截屏/录屏这类取屏入口）与现造快捷方式都先收起面板、等窗口提交
                             // 不可见帧后再执行，否则取屏工具会把手里的面板一起截进画面。
                             onClick(true) { launchEntry(alias, item) }
@@ -221,6 +313,40 @@ internal class ColorOsAllAppsContent(loader: ClassLoader, target: ColorOsSidebar
                                 val entry = getEntry.call(item)
                                 val tool = entry != null && getType.call(entry) == 0
                                 panelLog("PANEL_LAUNCH_ALIGNED " + key + " tool=" + tool)
+                                // 「更多」面板点中当前前台应用：原生路径只会弹「该应用已打开」。
+                                // 这里拦下来，请 system_server 把前台任务原地切成小窗。
+                                val panelPackage = key?.toString()?.substringBefore('#')
+                                if (tool.not() && panelPackage != null &&
+                                    panelPackage ==
+                                    io.github.hoerire.free.platform.coloros.PanelFocusState.focusedPackage
+                                ) {
+                                    panelLog("PANEL_SWITCH_ZOOM " + panelPackage)
+                                    onClick(false) {
+                                        runCatching {
+                                            // 必须让系统带上发起方 uid：Android 14 起跨进程广播默认不带身份，
+                                            // 接收侧看到的 sentFromUid 是 -1，会被直接判成陌生来源丢掉
+                                            //（真机日志：SYSTEM_PANEL_ZOOM_FOREIGN_SENDER_-1）。
+                                            val options =
+                                                android.app.BroadcastOptions.makeBasic()
+                                                    .setShareIdentityEnabled(true)
+                                                    .toBundle()
+                                            context.sendBroadcast(
+                                                android.content.Intent(
+                                                    io.github.hoerire.free.config.ModulePreferences
+                                                        .ACTION_PANEL_SWITCH_ZOOM,
+                                                ).putExtra(
+                                                    io.github.hoerire.free.config.ModulePreferences
+                                                        .EXTRA_PANEL_SWITCH_ZOOM_PACKAGE,
+                                                    panelPackage,
+                                                ),
+                                                null,
+                                                options,
+                                            )
+                                        }
+                                        closeAction?.invoke()
+                                    }
+                                    return@newProxyInstance nativeUnit
+                                }
                                 onClick(tool) {
                                     // 动画期间目录可能刷新，执行前按原条目标识重新定位，不能复用旧索引。
                                     val current = getData.call(search) as? List<*>

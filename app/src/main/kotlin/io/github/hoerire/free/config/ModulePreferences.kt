@@ -189,6 +189,20 @@ internal object ModulePreferences {
     const val ACTION_PREDICTIVE_BACK_ZOOM =
         "io.github.hoerire.free.action.PREDICTIVE_BACK_ZOOM"
 
+    /**
+     * 「更多」面板里点中**当前前台应用**：侧边栏进程拦截原生启动，改请 system_server
+     * 把前台任务原地切成小窗（原生路径会提示「该应用已打开」）。
+     */
+    const val ACTION_PANEL_SWITCH_ZOOM = "io.github.hoerire.free.action.PANEL_SWITCH_ZOOM"
+
+    /** 「最近文件」：收起「更多」面板，让原生侧边栏自己弹面板（文件袋在那里）。 */
+    const val ACTION_PANEL_OPEN_NATIVE = "io.github.hoerire.free.action.PANEL_OPEN_NATIVE"
+
+    /** 面板打开那一刻的前台应用（system_server → 侧边栏进程）。 */
+    const val ACTION_PANEL_FOCUS = "io.github.hoerire.free.action.PANEL_FOCUS"
+    const val EXTRA_PANEL_FOCUS_PACKAGE = "panel_focus_package"
+    const val EXTRA_PANEL_SWITCH_ZOOM_PACKAGE = "panel_switch_zoom_package"
+
     /** 下拉：打开「更多」面板。 */
     const val ACTION_PREDICTIVE_BACK_MORE_PANEL =
         "io.github.hoerire.free.action.PREDICTIVE_BACK_MORE_PANEL"

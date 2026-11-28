@@ -225,6 +225,16 @@ internal class SidebarHookInstaller(private val module: XposedModule, private va
         val receiver =
             object : android.content.BroadcastReceiver() {
                 override fun onReceive(receiverContext: android.content.Context?, intent: android.content.Intent?) {
+                    if (intent?.action ==
+                        io.github.hoerire.free.config.ModulePreferences.ACTION_PANEL_FOCUS
+                    ) {
+                        io.github.hoerire.free.platform.coloros.PanelFocusState.update(
+                            intent.getStringExtra(
+                                io.github.hoerire.free.config.ModulePreferences.EXTRA_PANEL_FOCUS_PACKAGE,
+                            ),
+                        )
+                        return
+                    }
                     if (intent?.action !=
                         io.github.hoerire.free.config.ModulePreferences.ACTION_PINNED_TARGETS_CHANGED
                     ) return
@@ -243,6 +253,7 @@ internal class SidebarHookInstaller(private val module: XposedModule, private va
                 receiver,
                 android.content.IntentFilter().apply {
                     addAction(io.github.hoerire.free.config.ModulePreferences.ACTION_PINNED_TARGETS_CHANGED)
+                    addAction(io.github.hoerire.free.config.ModulePreferences.ACTION_PANEL_FOCUS)
                 },
                 android.content.Context.RECEIVER_EXPORTED,
             )

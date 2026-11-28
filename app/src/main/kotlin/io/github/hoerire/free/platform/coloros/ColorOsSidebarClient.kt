@@ -55,6 +55,18 @@ internal class ColorOsSidebarClient(
 
     val isPending: Boolean get() = current?.committed == false
 
+    /**
+     * 让系统自己弹出原生侧边栏主面板（「最近文件/文件袋」就在那里）。
+     *
+     * 走的是已验证的 [NativeSidebarPanel]：绑 `EDGE_PANEL_UI_SERVICE` 后按交易码弹出。
+     * 侧边栏进程自己绑同一个服务做同样的事会失败（实测 transact 抛异常），所以这条只能从
+     * system_server 发起。
+     */
+    fun openNativePanel(): Boolean =
+        nativePanel.open { opened ->
+            log(android.util.Log.INFO, "PANEL_NATIVE_SIDEBAR_OPEN_" + opened, null)
+        }
+
     fun open(
         beforeOpen: () -> Boolean, onResult: (Outcome) -> Unit,
         onExitStarted: () -> Unit, onHideBackdrop: (() -> Unit) -> Unit, onClosed: () -> Unit,
