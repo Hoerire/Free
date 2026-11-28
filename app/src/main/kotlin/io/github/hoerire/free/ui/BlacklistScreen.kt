@@ -35,7 +35,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
  * 行样式与「扇形应用」页里的列表保持一致；数据由调用方按各自语义取。
  */
 @Composable
-private fun PackageListScreen(
+internal fun PackageListScreen(
     state: FrameworkConnectionState,
     apps: List<SelectableEntry>,
     onBack: () -> Unit,
@@ -47,6 +47,7 @@ private fun PackageListScreen(
     addSummary: String,
     emptyTitle: String,
     emptySummary: String,
+    subtitle: String? = null,
 ) {
     val blacklist = packages
     val enabled = state.settingsEditable
@@ -56,6 +57,7 @@ private fun PackageListScreen(
     SettingsPage(
         title = title,
         onBack = onBack,
+        subtitle = subtitle,
     ) {
         item(key = "add") {
             SettingsGroup(modifier = Modifier.fillMaxWidth()) {
@@ -163,7 +165,7 @@ internal fun ZoomExcludedScreen(
 
 /** 应用选择页：排除列表与「禁用浮窗」共用。 */
 @Composable
-private fun PackagePickerScreen(
+internal fun PackagePickerScreen(
     state: FrameworkConnectionState,
     apps: List<SelectableEntry>,
     appsLoading: Boolean,

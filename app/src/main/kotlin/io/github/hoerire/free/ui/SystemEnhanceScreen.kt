@@ -3,12 +3,12 @@ package io.github.hoerire.free.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.ElectricalServices
 import androidx.compose.material.icons.rounded.Gesture
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.Notifications
-import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material.icons.rounded.SwipeDown
@@ -35,7 +35,8 @@ import io.github.hoerire.free.ui.component.SwitchPreference
  *
  * 总览页只放「一功能一行」的入口，**参数一律进二级页**：这一层以后还要不断加功能，
  * 把开关和滑条都平铺在这里，页面会很快长到没人愿意翻。
- * 只有单一开关、没有参数的项（横条沉浸、自由拖拽）留在总览页，不为它们单开一页。
+ * 只有单一开关、没有参数的项（横条沉浸、隐藏卡片）留在总览页，不为它们单开一页；
+ * 需要选择生效应用的项（内容拖拽、自动贴边）一律进二级页。
  *
  * 二级页走与顶层路由同一套滑动转场：graphicsLayer 平移，不重排页面、不产生输入阻断层。
  */
@@ -43,7 +44,6 @@ private enum class SystemEnhancePage {
     Overview,
     StatusScroll,
     PredictiveBack,
-    FloatHandle,
 }
 
 @Composable
@@ -51,18 +51,17 @@ internal fun SystemEnhanceScreen(
     state: FrameworkConnectionState,
     onBack: () -> Unit,
     onExternalHandleEnabledChange: (Boolean) -> Unit,
-    onDragUnlockEnabledChange: (Boolean) -> Unit,
-    onHideZoomInRecentsChange: (Boolean) -> Unit,
+    onNavigateToDragUnlock: () -> Unit,
+    onEdgeDragFullScreenChange: (Boolean) -> Unit,
     onStatusScrollEnabledChange: (Boolean) -> Unit,
     onStatusScrollRoundsChange: (Int) -> Unit,
     onStatusScrollSpeedChange: (Int) -> Unit,
     onPredictiveBackEnabledChange: (Boolean) -> Unit,
     onPredictiveBackModeChange: (PredictiveBackMode) -> Unit,
     onPredictiveBackSwipeDistanceDpChange: (Int) -> Unit,
-    onFloatKeepAliveChange: (Boolean) -> Unit,
-    onFloatHandleMaxCountChange: (Int) -> Unit,
-    onZoomMaxWindowCountChange: (Int) -> Unit,
     onNavigateToPanelHidden: () -> Unit,
+    onNavigateToStatusScrollFilter: () -> Unit,
+    onNavigateToBubble: () -> Unit,
 ) {
     val pageStack = remember { mutableStateListOf(SystemEnhancePage.Overview) }
     val transition = remember { RouteTransitionState(SystemEnhancePage.Overview) }
@@ -108,47 +107,40 @@ internal fun SystemEnhanceScreen(
                                 enabled = enabled,
                                 startAction = { PreferenceIcon(Icons.Rounded.UnfoldMore, enabled) },
                             )
-                            // 解除限制：给内容传送门补通用拖拽白名单；与其它模块的拖拽增强
-                            // 撞车时单独关掉即可，不影响上面几项。
+                            // 边缘拖动：小窗拖到左右边缘变全屏。单一开关、没有参数，留在总览页。
                             SwitchPreference(
-                                checked = state.settings.dragUnlockEnabled,
-                                onCheckedChange = onDragUnlockEnabledChange,
+                                checked = state.settings.edgeDragFullScreen,
+                                onCheckedChange = onEdgeDragFullScreenChange,
+                                title = stringResource(R.string.edge_drag_title),
+                                summary = stringResource(R.string.edge_drag_summary),
+                                enabled = enabled,
+                                startAction = {
+                                    PreferenceIcon(Icons.Rounded.SwipeRight, enabled)
+                                },
+                            )
+                            // 内容拖拽：按应用开启，默认关闭。全局补配置会让部分机型/应用
+                            // 在 bind 阶段崩溃，所以参数（生效应用名单）放进二级页。
+                            ArrowPreference(
                                 title = stringResource(R.string.drag_unlock_title),
-                                summary = stringResource(R.string.drag_unlock_summary),
+                                summary = dragUnlockSummary(state),
+                                onClick = onNavigateToDragUnlock,
                                 enabled = enabled,
                                 startAction = { PreferenceIcon(Icons.Rounded.LockOpen, enabled) },
                             )
-                            // 小窗数量：单一可调项，没有从属开关，直接留在总览页。
-                            // 不受「启用交互」总闸约束，只跟模块总开关走。
-                            RemoteDpSliderPreference(
-                                icon = Icons.Rounded.Layers,
-                                confirmedValue = state.settings.zoomMaxWindowCount,
-                                isUpdating = state.isUpdating,
-                                enabled = enabled,
-                                title = stringResource(R.string.zoom_max_windows_title),
-                                summary = stringResource(R.string.zoom_max_windows_summary),
-                                minDp = ModulePreferences.MIN_ZOOM_MAX_WINDOW_COUNT,
-                                maxDp = ModulePreferences.MAX_ZOOM_MAX_WINDOW_COUNT,
-                                coerceDp = ModulePreferences::coerceZoomMaxWindowCount,
-                                onPreviewChange = {},
-                                onCommit = onZoomMaxWindowCountChange,
-                                showDpUnit = false,
-                            )
-                            // 隐藏卡片：小窗应用不出现在最近任务；同属「系统增强」，不受总闸约束。
-                            SwitchPreference(
-                                checked = state.settings.hideZoomInRecents,
-                                onCheckedChange = onHideZoomInRecentsChange,
-                                title = stringResource(R.string.hide_zoom_in_recents_title),
-                                summary = stringResource(R.string.hide_zoom_in_recents_summary),
-                                enabled = enabled,
-                                startAction = {
-                                    PreferenceIcon(Icons.Rounded.VisibilityOff, enabled)
-                                },
-                            )
+
                         }
                     }
                     item(key = "entries") {
                         SettingsGroup(modifier = Modifier.fillMaxWidth()) {
+                            // 气泡通知整组入口从首页搬到这里，排在滚动通知之上：
+                            // 两者是同一类「通知怎么显示」的能力，放一起才找得到。
+                            ArrowPreference(
+                                title = stringResource(R.string.bubble_feature_title),
+                                summary = stringResource(R.string.bubble_feature_summary),
+                                onClick = onNavigateToBubble,
+                                enabled = enabled,
+                                startAction = { PreferenceIcon(Icons.Rounded.Notifications, enabled) },
+                            )
                             ArrowPreference(
                                 title = stringResource(R.string.status_scroll_title),
                                 summary = statusScrollSummary(state),
@@ -173,13 +165,7 @@ internal fun SystemEnhanceScreen(
                                     PreferenceIcon(Icons.Rounded.VisibilityOff, enabled)
                                 },
                             )
-                            ArrowPreference(
-                                title = stringResource(R.string.float_group_title),
-                                summary = floatHandleSummary(state),
-                                onClick = { navigateTo(SystemEnhancePage.FloatHandle) },
-                                enabled = enabled,
-                                startAction = { PreferenceIcon(Icons.Rounded.PushPin, enabled) },
-                            )
+
                         }
                     }
                 }
@@ -226,6 +212,14 @@ internal fun SystemEnhanceScreen(
                                 onCommit = onStatusScrollSpeedChange,
                                 showDpUnit = false,
                             )
+                            // 过滤列表：有名单要维护，按本页约定单开二级页（与「隐藏应用」同一节奏）。
+                            ArrowPreference(
+                                title = stringResource(R.string.status_scroll_filter_title),
+                                summary = statusScrollFilterSummary(state),
+                                onClick = onNavigateToStatusScrollFilter,
+                                enabled = enabled,
+                                startAction = { PreferenceIcon(Icons.Rounded.Block, enabled) },
+                            )
                         }
                     }
                 }
@@ -259,7 +253,7 @@ internal fun SystemEnhanceScreen(
                                 enabled = enabled && state.settings.predictiveBackEnabled,
                                 description = stringResource(R.string.predictive_back_mode_summary),
                             )
-                            // 滑动距离只在返回增强开启时才有意义，关闭时置灰。
+                            // 滑动距离只在侧滑扩展开启时才有意义，关闭时置灰。
                             RemoteDpSliderPreference(
                                 icon = Icons.Rounded.SwipeDown,
                                 confirmedValue = state.settings.predictiveBackSwipeDistanceDp,
@@ -277,46 +271,38 @@ internal fun SystemEnhanceScreen(
                         }
                     }
                 }
-            SystemEnhancePage.FloatHandle ->
-                SettingsPage(title = stringResource(R.string.float_group_title), onBack = goBack) {
-                    item(key = "floatHandle") {
-                        SettingsGroup(modifier = Modifier.fillMaxWidth()) {
-                            SwitchPreference(
-                                checked = state.settings.floatKeepAlive,
-                                onCheckedChange = onFloatKeepAliveChange,
-                                title = stringResource(R.string.float_keep_alive_title),
-                                summary = stringResource(R.string.float_keep_alive_summary),
-                                enabled = enabled,
-                                startAction = {
-                                    PreferenceIcon(Icons.Rounded.ElectricalServices, enabled)
-                                },
-                            )
-                            RemoteDpSliderPreference(
-                                icon = Icons.Rounded.SwipeRight,
-                                confirmedValue = state.settings.floatHandleMaxCount,
-                                isUpdating = state.isUpdating,
-                                enabled = enabled,
-                                title = stringResource(R.string.float_handle_max_title),
-                                summary = stringResource(R.string.float_handle_max_summary),
-                                minDp = ModulePreferences.MIN_FLOAT_HANDLE_MAX_COUNT,
-                                maxDp = ModulePreferences.MAX_FLOAT_HANDLE_MAX_COUNT,
-                                coerceDp = ModulePreferences::coerceFloatHandleMaxCount,
-                                onPreviewChange = {},
-                                onCommit = onFloatHandleMaxCountChange,
-                                showDpUnit = false,
-                            )
-                        }
-                    }
-                }
+
         }
     }
 }
 
-/** 隐藏应用的入口行：报条数，没配就是「关」。 */
+/** 内容拖拽入口：报条数，没配就是「关」。 */
+@Composable
+private fun dragUnlockSummary(state: FrameworkConnectionState): String {
+    val count = state.settings.dragUnlockPackages.size
+    return if (count == 0) {
+        stringResource(R.string.drag_unlock_summary)
+    } else {
+        stringResource(R.string.drag_unlock_summary_active, count)
+    }
+}
+
+
 @Composable
 private fun panelHiddenSummary(state: FrameworkConnectionState): String {
     val count = state.settings.panelHiddenPackages.size
     return if (count == 0) stringResource(R.string.entry_off) else "$count 个应用"
+}
+
+/** 过滤列表入口：报条数，没配就把作用一句话说清。 */
+@Composable
+private fun statusScrollFilterSummary(state: FrameworkConnectionState): String {
+    val count = state.settings.statusScrollExcluded.size
+    return if (count == 0) {
+        stringResource(R.string.status_scroll_filter_summary)
+    } else {
+        stringResource(R.string.status_scroll_filter_entry_on, count)
+    }
 }
 
 /** 入口行只报「现在是什么状态」，不复述二级页的说明文字。 */
@@ -340,17 +326,6 @@ private fun predictiveBackSummary(state: FrameworkConnectionState): String =
             ModulePreferences.coercePredictiveBackSwipeDistanceDp(
                 state.settings.predictiveBackSwipeDistanceDp,
             ),
-        )
-    } else {
-        stringResource(R.string.entry_off)
-    }
-
-@Composable
-private fun floatHandleSummary(state: FrameworkConnectionState): String =
-    if (state.settings.floatKeepAlive) {
-        stringResource(
-            R.string.float_entry_on,
-            ModulePreferences.coerceFloatHandleMaxCount(state.settings.floatHandleMaxCount),
         )
     } else {
         stringResource(R.string.entry_off)

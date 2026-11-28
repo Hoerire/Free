@@ -42,6 +42,19 @@ internal sealed interface AppRoute {
 
     object PanelHidden : AppRoute
     object PanelHiddenPicker : AppRoute
+
+    /** 滚动通知的过滤列表：表内应用的通知不进状态栏滚动。 */
+    object StatusScrollFilter : AppRoute
+    object StatusScrollFilterPicker : AppRoute
+
+    /** 自动贴边：名单里的应用回到桌面时自动收成贴边浮标。 */
+    object AutoDock : AppRoute
+    object AutoDockPicker : AppRoute
+
+    /** 内容拖拽：名单里的应用补通用拖拽白名单。 */
+    object DragUnlock : AppRoute
+    object DragUnlockPicker : AppRoute
+
     object ZoomExcluded : AppRoute
 
     object ZoomExcludedPicker : AppRoute
@@ -60,7 +73,7 @@ internal sealed interface AppRoute {
     /** 手势交互二级页：快速上滑 / 长按静音 / 关闭方式。 */
     object ZoomGesture : AppRoute
 
-    /** 系统增强二级页：横条沉浸 / 返回增强 / 贴边浮标。 */
+    /** 系统增强二级页：横条沉浸 / 侧滑扩展 / 贴边浮标。 */
     object SystemEnhance : AppRoute
 
     /** 气泡通知设置页：应用 / 分身应用两组白名单 + 外观。 */
@@ -103,7 +116,8 @@ internal fun FreeNavHost(
     onOutsideTapCloseModeChange: (OutsideTapCloseMode) -> Unit,
     onHandleSwipeUpToMiniEnabledChange: (Boolean) -> Unit,
     onExternalHandleEnabledChange: (Boolean) -> Unit,
-    onDragUnlockEnabledChange: (Boolean) -> Unit,
+    onDragUnlockPackagesChange: (List<String>) -> Unit,
+    onEdgeDragFullScreenChange: (Boolean) -> Unit,
     onPauseInLandscapeChange: (Boolean) -> Unit,
     onPauseInGameModeChange: (Boolean) -> Unit,
     onPauseInKeyboardChange: (Boolean) -> Unit,
@@ -139,6 +153,9 @@ internal fun FreeNavHost(
     onStatusScrollEnabledChange: (Boolean) -> Unit,
     onStatusScrollRoundsChange: (Int) -> Unit,
     onStatusScrollSpeedChange: (Int) -> Unit,
+    onStatusScrollExcludedChange: (List<String>) -> Unit,
+    onAutoDockPackagesChange: (List<String>) -> Unit,
+    onZoomLandscapeSideChange: (io.github.hoerire.free.config.LandscapeZoomSide) -> Unit,
     updateFlow: kotlinx.coroutines.flow.StateFlow<UpdateState>,
     onCheckUpdate: () -> Unit,
     onDismissUpdate: (String) -> Unit,
@@ -198,6 +215,17 @@ internal fun FreeNavHost(
         remember(backStack) { { pushRoute(AppRoute.PanelHidden) } }
     val navigateToPanelHiddenPicker: () -> Unit =
         remember(backStack) { { pushRoute(AppRoute.PanelHiddenPicker) } }
+    val navigateToStatusScrollFilter: () -> Unit =
+        remember(backStack) { { pushRoute(AppRoute.StatusScrollFilter) } }
+    val navigateToStatusScrollFilterPicker: () -> Unit =
+        remember(backStack) { { pushRoute(AppRoute.StatusScrollFilterPicker) } }
+    val navigateToAutoDock: () -> Unit = remember(backStack) { { pushRoute(AppRoute.AutoDock) } }
+    val navigateToAutoDockPicker: () -> Unit =
+        remember(backStack) { { pushRoute(AppRoute.AutoDockPicker) } }
+    val navigateToDragUnlock: () -> Unit =
+        remember(backStack) { { pushRoute(AppRoute.DragUnlock) } }
+    val navigateToDragUnlockPicker: () -> Unit =
+        remember(backStack) { { pushRoute(AppRoute.DragUnlockPicker) } }
     val navigateToZoomExcludedPicker: () -> Unit =
         remember(backStack) { { pushRoute(AppRoute.ZoomExcludedPicker) } }
 
@@ -249,7 +277,6 @@ internal fun FreeNavHost(
                     onNavigateToZoomOptions = navigateToZoomOptions,
                     onNavigateToSystemEnhance = navigateToSystemEnhance,
                     onNavigateToAbout = navigateToAbout,
-                    onNavigateToBubble = navigateToBubble,
                 )
             AppRoute.Bubble ->
                 BubbleScreen(
@@ -297,18 +324,17 @@ internal fun FreeNavHost(
                     state = state,
                     onBack = popBackStack,
                     onExternalHandleEnabledChange = onExternalHandleEnabledChange,
-                    onDragUnlockEnabledChange = onDragUnlockEnabledChange,
-                    onHideZoomInRecentsChange = onHideZoomInRecentsChange,
+                    onNavigateToDragUnlock = navigateToDragUnlock,
+                    onEdgeDragFullScreenChange = onEdgeDragFullScreenChange,
                     onStatusScrollEnabledChange = onStatusScrollEnabledChange,
                     onStatusScrollRoundsChange = onStatusScrollRoundsChange,
                     onStatusScrollSpeedChange = onStatusScrollSpeedChange,
                     onPredictiveBackEnabledChange = onPredictiveBackEnabledChange,
                     onPredictiveBackModeChange = onPredictiveBackModeChange,
                     onPredictiveBackSwipeDistanceDpChange = onPredictiveBackSwipeDistanceDpChange,
-                    onFloatKeepAliveChange = onFloatKeepAliveChange,
-                    onFloatHandleMaxCountChange = onFloatHandleMaxCountChange,
-                    onZoomMaxWindowCountChange = onZoomMaxWindowCountChange,
                     onNavigateToPanelHidden = navigateToPanelHidden,
+                    onNavigateToStatusScrollFilter = navigateToStatusScrollFilter,
+                    onNavigateToBubble = navigateToBubble,
                 )
             AppRoute.RadialEffect ->
                 RadialEffectScreen(
@@ -343,6 +369,12 @@ internal fun FreeNavHost(
                     onZoomInteractionEnabledChange = onZoomInteractionEnabledChange,
                     onZoomAllowAnyAppChange = onZoomAllowAnyAppChange,
                     onAutoCloseWindowChange = onAutoCloseWindowChange,
+                    onZoomMaxWindowCountChange = onZoomMaxWindowCountChange,
+                    onZoomLandscapeSideChange = onZoomLandscapeSideChange,
+                    onHideZoomInRecentsChange = onHideZoomInRecentsChange,
+                    onFloatKeepAliveChange = onFloatKeepAliveChange,
+                    onFloatHandleMaxCountChange = onFloatHandleMaxCountChange,
+                    onNavigateToAutoDock = navigateToAutoDock,
                     onNavigateToZoomExcluded = navigateToZoomExcluded,
                     onNavigateToZoomLaunchScenes = navigateToZoomLaunchScenes,
                     onNavigateToGesture = navigateToGesture,
@@ -372,6 +404,58 @@ internal fun FreeNavHost(
                     appsLoading = appsLoading,
                     onBack = popBackStack,
                     onPanelHiddenChange = onPanelHiddenChange,
+                )
+            AppRoute.StatusScrollFilter ->
+                StatusScrollFilterScreen(
+                    state = state,
+                    apps = apps,
+                    clones = clones,
+                    onRefreshClones = onRefreshClones,
+                    onBack = popBackStack,
+                    onAddApps = navigateToStatusScrollFilterPicker,
+                    onStatusScrollExcludedChange = onStatusScrollExcludedChange,
+                )
+            AppRoute.StatusScrollFilterPicker ->
+                StatusScrollFilterPickerScreen(
+                    state = state,
+                    apps = apps,
+                    clones = clones,
+                    appsLoading = appsLoading,
+                    onRefreshClones = onRefreshClones,
+                    onBack = popBackStack,
+                    onStatusScrollExcludedChange = onStatusScrollExcludedChange,
+                )
+            AppRoute.AutoDock ->
+                AutoDockScreen(
+                    state = state,
+                    apps = apps,
+                    onBack = popBackStack,
+                    onAddApps = navigateToAutoDockPicker,
+                    onAutoDockPackagesChange = onAutoDockPackagesChange,
+                )
+            AppRoute.AutoDockPicker ->
+                AutoDockPickerScreen(
+                    state = state,
+                    apps = apps,
+                    appsLoading = appsLoading,
+                    onBack = popBackStack,
+                    onAutoDockPackagesChange = onAutoDockPackagesChange,
+                )
+            AppRoute.DragUnlock ->
+                DragUnlockScreen(
+                    state = state,
+                    apps = apps,
+                    onBack = popBackStack,
+                    onAddApps = navigateToDragUnlockPicker,
+                    onDragUnlockPackagesChange = onDragUnlockPackagesChange,
+                )
+            AppRoute.DragUnlockPicker ->
+                DragUnlockPickerScreen(
+                    state = state,
+                    apps = apps,
+                    appsLoading = appsLoading,
+                    onBack = popBackStack,
+                    onDragUnlockPackagesChange = onDragUnlockPackagesChange,
                 )
             AppRoute.ZoomExcluded ->
                 ZoomExcludedScreen(
@@ -440,8 +524,14 @@ private fun routeOfName(name: String): AppRoute? =
         AppRoute.BlacklistPicker.javaClass.name -> AppRoute.BlacklistPicker
         AppRoute.ZoomOptions.javaClass.name -> AppRoute.ZoomOptions
         AppRoute.ZoomLaunchScenes.javaClass.name -> AppRoute.ZoomLaunchScenes
-        AppRoute.PanelHidden.javaClass.name -> AppRoute.PanelHidden
-    AppRoute.PanelHiddenPicker.javaClass.name -> AppRoute.PanelHiddenPicker
+            AppRoute.PanelHidden.javaClass.name -> AppRoute.PanelHidden
+        AppRoute.PanelHiddenPicker.javaClass.name -> AppRoute.PanelHiddenPicker
+        AppRoute.StatusScrollFilter.javaClass.name -> AppRoute.StatusScrollFilter
+        AppRoute.StatusScrollFilterPicker.javaClass.name -> AppRoute.StatusScrollFilterPicker
+        AppRoute.AutoDock.javaClass.name -> AppRoute.AutoDock
+        AppRoute.AutoDockPicker.javaClass.name -> AppRoute.AutoDockPicker
+        AppRoute.DragUnlock.javaClass.name -> AppRoute.DragUnlock
+        AppRoute.DragUnlockPicker.javaClass.name -> AppRoute.DragUnlockPicker
     AppRoute.ZoomExcluded.javaClass.name -> AppRoute.ZoomExcluded
         AppRoute.ZoomExcludedPicker.javaClass.name -> AppRoute.ZoomExcludedPicker
         AppRoute.RadialSettings.javaClass.name -> AppRoute.RadialSettings

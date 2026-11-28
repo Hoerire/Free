@@ -1,6 +1,6 @@
 # 全部面板
 
-Flyme 小窗是面向 ColorOS 的非官方独立实现，与魅族、Flyme、OPPO 或 ColorOS 无关联。
+ColorOS 小窗（Free）是面向 ColorOS 的非官方独立实现，与魅族、Flyme、OPPO 或 ColorOS 无关联。
 
 ## 系统面板
 

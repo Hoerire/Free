@@ -8,6 +8,8 @@ import io.github.libxposed.api.XposedModule
 import io.github.hoerire.free.config.ModulePreferences
 import io.github.hoerire.free.config.PredictiveBackMode
 import io.github.hoerire.free.log.ModuleLog
+import io.github.hoerire.free.log.VerboseLog
+import io.github.hoerire.free.logic.PredictiveBackAngle
 import java.lang.reflect.Method
 
 /**
@@ -50,6 +52,19 @@ internal class PredictiveBackSwipeHook(
     private var downY = 0f
     private var lastX = 0f
     private var lastY = 0f
+
+    /**
+     * 最近一小段（约 [SAMPLE_MS] 内）的位移方向。
+     *
+     * 只看总位移不够：斜着起手、后段转正，累计角度会一路衰减到阈值以内，照样触发。
+     * 最近的走向才代表「手指现在正往哪儿滑」。
+     */
+    private var recentDx = 0f
+    private var recentDy = 0f
+    private var sampleX = 0f
+    private var sampleY = 0f
+    private var sampleAt = 0L
+
     private var lastIndex = 0
     private var lastDisplay = 0
 
@@ -112,6 +127,11 @@ internal class PredictiveBackSwipeHook(
         downY = (chain.getArg(1) as? Number)?.toFloat() ?: 0f
         lastX = downX
         lastY = downY
+        recentDx = 0f
+        recentDy = 0f
+        sampleX = downX
+        sampleY = downY
+        sampleAt = android.os.SystemClock.uptimeMillis()
         lastIndex = (chain.getArg(3) as? Number)?.toInt() ?: 0
         lastDisplay = (chain.getArg(4) as? Number)?.toInt() ?: 0
         leftEdge = downX < screenWidth / 2f
@@ -148,26 +168,70 @@ internal class PredictiveBackSwipeHook(
         val snapshot = configuration.snapshot
         val threshold = snapshot.predictiveBackSwipeDistanceDpEffective * density
         val delta = y - downY
+        // 每 [SAMPLE_MS] 记一段走向；纵向位移太小（< 6dp）的不更新，避免抖动被当成斜滑。
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - sampleAt >= SAMPLE_MS) {
+            val sx = x - sampleX
+            val sy = y - sampleY
+            if (kotlin.math.abs(sy) >= MIN_SAMPLE_DP * density) {
+                recentDx = sx
+                recentDy = sy
+            }
+            sampleX = x
+            sampleY = y
+            sampleAt = now
+        }
         // 上滑单独用更短的阈值：内滑后手腕已内旋，再上抬要先克服这个角度，
         // 同样的物理行程体感更远。下拉沿用设置值。
         val up = threshold * UPWARD_FACTOR
         // 方向即动作。两种模式都是双方向，互换了"哪个方向做哪件事"。
-        when (snapshot.predictiveBackMode) {
-            PredictiveBackMode.ZoomUpMoreDown ->
-                when {
-                    // 上滑（y 变小）：切窗口形态。
-                    delta <= -up -> fire(ModulePreferences.ACTION_PREDICTIVE_BACK_ZOOM)
-                    // 下拉（y 变大）：打开「更多」面板。
-                    delta >= threshold -> fire(ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL)
+        val action =
+            when (snapshot.predictiveBackMode) {
+                PredictiveBackMode.ZoomUpMoreDown ->
+                    when {
+                        // 上滑（y 变小）：切窗口形态。
+                        delta <= -up -> ModulePreferences.ACTION_PREDICTIVE_BACK_ZOOM
+                        // 下拉（y 变大）：打开「更多」面板。
+                        delta >= threshold -> ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL
+                        else -> null
+                    }
+                PredictiveBackMode.ZoomDownMoreUp ->
+                    when {
+                        // 上滑：打开「更多」面板。
+                        delta <= -up -> ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL
+                        // 下拉：切窗口形态。
+                        delta >= threshold -> ModulePreferences.ACTION_PREDICTIVE_BACK_ZOOM
+                        else -> null
+                    }
+            } ?: return
+        // 角度约束只加在下拉上：下拉是顺着手指自然回落，方向一斜就会累计纵向位移、
+        // 把「更多」面板误触出来；上滑本来就要先克服手腕内旋、不容易触发，不需要再限制。
+        //
+        // 两条都要过：整段位移的方向（起点 → 当前）与**最近一小段**的方向。
+        // 只看整段时，斜着起手、后段转正的轨迹会被累计角度「洗白」，实测就是这么误触的。
+        if (delta >= threshold) {
+            val totalDx = x - downX
+            val totalDy = y - downY
+            val totalOk = PredictiveBackAngle.isVertical(totalDx, totalDy)
+            val recentOk =
+                recentDy == 0f || PredictiveBackAngle.isRecentVertical(recentDx, recentDy)
+            if (!totalOk || !recentOk) {
+                if (VerboseLog.enabled) {
+                    ModuleLog.debug("Free") {
+                        "PREDICTIVE_BACK_ANGLE_REJECT_t" +
+                            PredictiveBackAngle.degreesFromVertical(totalDx, totalDy) +
+                            "_r" + PredictiveBackAngle.degreesFromVertical(recentDx, recentDy)
+                    }
                 }
-            PredictiveBackMode.ZoomDownMoreUp ->
-                when {
-                    // 上滑：打开「更多」面板。
-                    delta <= -up -> fire(ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL)
-                    // 下拉：切窗口形态。
-                    delta >= threshold -> fire(ModulePreferences.ACTION_PREDICTIVE_BACK_ZOOM)
-                }
+                return
+            }
         }
+        if (VerboseLog.enabled) {
+            ModuleLog.debug("Free") {
+                "PREDICTIVE_BACK_FIRE_dy" + (y - downY).toInt() + "_thr" + threshold.toInt()
+            }
+        }
+        fire(action)
     }
 
     /** 滑够距离：通知 system_server 执行动作，并结束这次返回手势。 */
@@ -242,6 +306,8 @@ internal class PredictiveBackSwipeHook(
     private fun resetGesture() {
         armed = false
         fired = false
+        recentDx = 0f
+        recentDy = 0f
     }
 
     private companion object {
@@ -259,7 +325,12 @@ internal class PredictiveBackSwipeHook(
          */
         const val UPWARD_FACTOR = 0.4f
 
-        /** 下拉方向的阈值系数：1.0，直接用设置里的滑条值。 */
+        /** 走向采样间隔：只看最近这一小段的方向，避免斜起手、后段转正被「洗白」。 */
+        const val SAMPLE_MS = 32L
+
+        /** 采样段的最小纵向位移（dp）：太小的抖动不参与方向判定。 */
+        const val MIN_SAMPLE_DP = 6f
+
         const val ACTION_DOWN = 0
         const val ACTION_UP = 1
         const val ACTION_MOVE = 2

@@ -131,9 +131,17 @@ internal class FrameworkConnectionRepository(private val context: Context) {
     fun setRadialInteractionEnabled(enabled: Boolean) =
         updateSettings { it.copy(radialInteractionEnabled = enabled) }
 
-    /** 解除限制：改写系统长按拖拽的准入名单。 */
-    fun setDragUnlockEnabled(enabled: Boolean) =
-        updateSettings { it.copy(dragUnlockEnabled = enabled) }
+    /** 边缘拖动：小窗拖到屏幕左右边缘时变全屏。 */
+    fun setEdgeDragFullScreen(enabled: Boolean) =
+        updateSettings { it.copy(edgeDragFullScreen = enabled) }
+
+    /** 内容拖拽：这些应用补通用拖拽白名单（空名单即关闭）。 */
+    fun setDragUnlockPackages(packages: List<String>) =
+        updateSettings {
+            it.copy(
+                dragUnlockPackages = ModulePreferences.decodePackages(packages.joinToString("\n")),
+            )
+        }
 
     /** 小窗交互总开关：关闭后整组小窗改写退出，把这条链路让给系统或其它模块。 */
     fun setZoomInteractionEnabled(enabled: Boolean) =
@@ -166,6 +174,18 @@ internal class FrameworkConnectionRepository(private val context: Context) {
             )
         }
 
+    /** 横屏时小窗固定落在哪一侧。 */
+    fun setZoomLandscapeSide(side: io.github.hoerire.free.config.LandscapeZoomSide) =
+        updateSettings { it.copy(zoomLandscapeSide = side) }
+
+    /** 自动贴边：这些应用回到桌面时自动收成贴边浮标（空名单即关闭）。 */
+    fun setAutoDockPackages(packages: List<String>) =
+        updateSettings {
+            it.copy(
+                autoDockPackages = ModulePreferences.decodePackages(packages.joinToString("\n")),
+            )
+        }
+
     /** 滚动通知：最新通知在状态栏时钟位置滚动显示，与气泡总闸互不依赖。 */
     fun setStatusScrollEnabled(enabled: Boolean) =
         updateSettings { it.copy(statusScrollEnabled = enabled) }
@@ -178,6 +198,15 @@ internal class FrameworkConnectionRepository(private val context: Context) {
     fun setStatusScrollSpeed(speed: Int) =
         updateSettings {
             it.copy(statusScrollSpeed = ModulePreferences.coerceStatusScrollSpeed(speed))
+        }
+
+    /** 滚动通知的过滤列表：表内应用的通知不进状态栏滚动（键含分身的 `包名#userId`）。 */
+    fun setStatusScrollExcluded(keys: List<String>) =
+        updateSettings {
+            it.copy(
+                statusScrollExcluded =
+                    ModulePreferences.decodeBubbleKeys(ModulePreferences.encodeBubbleKeys(keys)),
+            )
         }
 
     /**
@@ -234,7 +263,7 @@ internal class FrameworkConnectionRepository(private val context: Context) {
     fun setLongPressMute(enabled: Boolean) =
         updateSettings { it.copy(longPressMuteEnabled = enabled) }
 
-    /** 返回增强：边缘内滑后上滑切小窗、下拉打开更多。 */
+    /** 侧滑扩展：边缘内滑后上滑切小窗、下拉打开更多。 */
     fun setPredictiveBackEnabled(enabled: Boolean) =
         updateSettings { it.copy(predictiveBackEnabled = enabled) }
 
@@ -242,7 +271,7 @@ internal class FrameworkConnectionRepository(private val context: Context) {
     fun setPredictiveBackMode(mode: PredictiveBackMode) =
         updateSettings { it.copy(predictiveBackMode = mode) }
 
-    /** 返回增强的触发距离（dp）：内滑后上滑或下拉超过该距离才接管。 */
+    /** 侧滑扩展的触发距离（dp）：内滑后上滑或下拉超过该距离才接管。 */
     fun setPredictiveBackSwipeDistanceDp(dp: Int) =
         updateSettings {
             it.copy(

@@ -300,6 +300,8 @@ class ModuleSettingsSnapshotTest {
                 autoCloseWindow = true,
                 zoomLaunchNotice = true,
                 zoomMaxWindowCount = 3,
+                // 内容拖拽按应用生效：给一个名单，才能验证它不受小窗总闸影响。
+                dragUnlockPackages = listOf("com.tencent.mm"),
             )
         assertTrue(on.zoomInteractionActive)
         assertTrue(on.longPressMuteEffective)
@@ -310,13 +312,13 @@ class ModuleSettingsSnapshotTest {
         assertFalse(off.zoomInteractionActive)
         assertFalse(off.autoCloseWindowEffective)
         assertFalse(off.zoomLaunchNoticeEffective)
-        // 小窗数量不再随总闸作废：它已经搬到「系统增强」，只跟模块总开关走。
+        // 数量本身是数值，仍保留设置值；真正裁决它的钩子会先看总闸。
         assertEquals(3, off.zoomMaxWindowCountEffective)
         assertTrue(off.externalHandleEffective)
-        assertTrue(off.floatKeepAliveEffective)
         assertTrue(off.dragUnlockActive)
-        // 隐藏卡片同样搬进了「系统增强」，不再随总闸作废。
-        assertTrue(off.hideZoomInRecentsEffective)
+        // 贴边挂机、隐藏卡片已搬进「小窗交互」：随总闸一起停。
+        assertFalse(off.floatKeepAliveEffective)
+        assertFalse(off.hideZoomInRecentsEffective)
 
         // 往返：开关独立存盘，互不覆盖。
         val preferences = InMemoryPreferences()
@@ -325,12 +327,16 @@ class ModuleSettingsSnapshotTest {
     }
 
     @Test
-    fun dragUnlockHasItsOwnSwitch() {
-        val on = ModuleSettingsSnapshot(enabled = true, externalHandleEnabled = true)
+    fun dragUnlockIsOffUntilAppsAreSelected() {
+        // 默认关闭：全局补配置会让部分机型/应用在 bind 阶段崩溃，改成按应用生效。
+        val empty = ModuleSettingsSnapshot(enabled = true, externalHandleEnabled = true)
+        assertFalse(empty.dragUnlockActive)
+
+        val on = empty.copy(dragUnlockPackages = listOf("com.tencent.mm", "com.android.chrome"))
         assertTrue(on.dragUnlockActive)
 
-        // 单独关掉解除限制：只影响拖拽准入，其它能力照旧。
-        val unlockOff = on.copy(dragUnlockEnabled = false)
+        // 清空名单即关闭，其它能力照旧。
+        val unlockOff = on.copy(dragUnlockPackages = emptyList())
         assertFalse(unlockOff.dragUnlockActive)
         assertTrue(unlockOff.zoomInteractionActive)
         assertTrue(unlockOff.externalHandleEffective)
@@ -339,8 +345,11 @@ class ModuleSettingsSnapshotTest {
         assertFalse(on.copy(enabled = false).dragUnlockActive)
 
         val preferences = InMemoryPreferences()
-        unlockOff.writeTo(preferences.edit()).commit()
-        assertFalse(ModuleSettingsSnapshot.readFrom(preferences).dragUnlockEnabled)
+        on.writeTo(preferences.edit()).commit()
+        assertEquals(
+            listOf("com.tencent.mm", "com.android.chrome"),
+            ModuleSettingsSnapshot.readFrom(preferences).dragUnlockPackages,
+        )
     }
 
     @Test

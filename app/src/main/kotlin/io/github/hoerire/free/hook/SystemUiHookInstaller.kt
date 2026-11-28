@@ -59,7 +59,7 @@ internal class SystemUiHookInstaller(
                             ModuleLog.warn("SYSTEMUI_NAV_HANDLE_IMMERSIVE_FAILED", it)
                         }
                         // 侧滑扩展：边缘内滑后按方向执行动作。
-                        // 只在 ColorOS 17+ 接线（返回增强手势与本地小窗切换都是这一代才有）。
+                        // 只在 ColorOS 17+ 接线（侧滑扩展手势与本地小窗切换都是这一代才有）。
                         if (RomFlavor.isColorOs17OrNewer) {
                             runCatching {
                                 PredictiveBackSwipeHook(module, configuration, context)

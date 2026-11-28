@@ -94,8 +94,11 @@ class ModuleMain : XposedModule() {
                     "_radial" + settings.cornerInteractionActive +
                     // 小窗交互总闸：关掉时整组小窗改写不参与，排查冲突先看这一位。
                     "_zoom" + settings.zoomInteractionActive +
-                    // 解除限制：给系统没登记的应用补通用拖拽白名单。
-                    "_du" + settings.dragUnlockActive +
+                    // 边缘拖动：小窗拖到左右边缘变全屏。
+                    "_edgeDrag" + settings.edgeDragFullScreenActive +
+                    // 内容拖拽：只给名单里的应用补通用拖拽白名单（条数为 0 即关闭）。
+                    "_drag" + settings.dragUnlockActive +
+                    "_dragN" + settings.dragUnlockPackages.size +
                     "_keep" + settings.radialKeepOpen +
                     "_tap" + settings.outsideTapCloseMode.storedValue +
                     "_vlog" + settings.verboseLogEnabled +
@@ -103,13 +106,20 @@ class ModuleMain : XposedModule() {
                     "_bl" + settings.blacklistPackages.size +
                     // 「禁用浮窗」的条目数。
                     "_zx" + settings.zoomExcludedPackages.size +
-                    // 返回增强：方向触发的开关与滑动距离（dp）。
+                    // 侧滑扩展：方向触发的开关与滑动距离（dp）。
                     "_pb" + settings.predictiveBackEffective +
                     "_pbDp" + settings.predictiveBackSwipeDistanceDpEffective +
                     // 侧滑扩展的手势模式（0 上滑切窗+下滑更多 / 1 下滑切窗 / 2 下滑更多）。
                     "_pbMode" + settings.predictiveBackMode.storedValue +
                     // 气泡「只通知模式」：开启后气泡不接收触摸、到点直接消失。
-                    "_noti" + settings.bubbleNoticeOnly
+                    "_noti" + settings.bubbleNoticeOnly +
+                    // 滚动通知的过滤列表条数：为 0 时表内应用照常滚，排查过滤不生效先看这一位。
+                    "_ssf" + settings.statusScrollExcluded.size +
+                    // 自动贴边：开关（名单非空即开）与名单条数。
+                    "_ad" + settings.autoDockActive +
+                    "_adN" + settings.autoDockPackages.size +
+                    // 横屏小窗位置：0 跟随系统 / 1 靠左 / 2 靠右。
+                    "_zside" + settings.zoomLandscapeSide.storedValue
             }
         }
         // 从这里开始进入安装阶段：关闭详细日志时，每一步安装只累计数量，结束时汇总一行；

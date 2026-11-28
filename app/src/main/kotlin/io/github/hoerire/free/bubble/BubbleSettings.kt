@@ -2,6 +2,7 @@ package io.github.hoerire.free.bubble
 
 import io.github.hoerire.free.config.ModulePreferences
 import io.github.hoerire.free.config.ModuleSettingsSnapshot
+import io.github.hoerire.free.logic.StatusScrollFilter
 
 /**
  * 气泡的只读配置：从整份设置快照切出来。
@@ -46,6 +47,8 @@ internal data class BubbleSettings(
     val statusScrollRounds: Int = ModulePreferences.DEFAULT_STATUS_SCROLL_ROUNDS,
     /** 滚动速度（像素/秒），恒定，不随文本长度变化。 */
     val statusScrollSpeed: Int = ModulePreferences.DEFAULT_STATUS_SCROLL_SPEED,
+    /** 滚动通知的过滤列表：键与气泡白名单同一套（主应用 `包名`、分身 `包名#userId`）。 */
+    val statusScrollExcluded: Set<String> = emptySet(),
     /** 免打扰：三种场景各自独立，见 [BubbleEnvironmentGate]。 */
     val skipForeground: Boolean = ModulePreferences.DEFAULT_BUBBLE_SKIP_FOREGROUND,
     val skipGame: Boolean = ModulePreferences.DEFAULT_BUBBLE_SKIP_GAME,
@@ -82,6 +85,10 @@ internal data class BubbleSettings(
         return if (userId > 0) cloneWhitelist.contains(key) else whitelist.contains(packageName)
     }
 
+    /** 滚动通知是否接管这个身份：过滤列表里的键不进状态栏滚动。 */
+    fun statusScrollAccepts(identity: BubbleIdentity): Boolean =
+        StatusScrollFilter.accepts(statusScrollExcluded, identity.whitelistKey)
+
     companion object {
         val INACTIVE =
             BubbleSettings(
@@ -107,6 +114,7 @@ internal data class BubbleSettings(
                 statusScrollActive = false,
                 statusScrollRounds = ModulePreferences.DEFAULT_STATUS_SCROLL_ROUNDS,
                 statusScrollSpeed = ModulePreferences.DEFAULT_STATUS_SCROLL_SPEED,
+                statusScrollExcluded = emptySet(),
                 suggestionsActive = false,
             )
 
@@ -140,6 +148,7 @@ internal data class BubbleSettings(
                     ModulePreferences.coerceStatusScrollRounds(snapshot.statusScrollRounds),
                 statusScrollSpeed =
                     ModulePreferences.coerceStatusScrollSpeed(snapshot.statusScrollSpeed),
+                statusScrollExcluded = snapshot.statusScrollExcluded.toSet(),
                 skipForeground = snapshot.bubbleSkipForeground,
                 skipGame = snapshot.bubbleSkipGame,
                 skipLocked = snapshot.bubbleSkipLocked,

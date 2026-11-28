@@ -165,7 +165,7 @@ internal class ColorOsFreeformCoordinator(
         }
 
     /**
-     * 返回增强：SystemUI 在边缘内滑后按滑动方向触发对应动作。
+     * 侧滑扩展：SystemUI 在边缘内滑后按滑动方向触发对应动作。
      *
      * - 上滑 → [ModulePreferences.ACTION_PREDICTIVE_BACK_ZOOM]：焦点应用在「全屏 ↔ 小窗」之间切换；
      * - 下拉 → [ModulePreferences.ACTION_PREDICTIVE_BACK_MORE_PANEL]：打开「更多」面板。
@@ -2068,7 +2068,7 @@ internal class ColorOsFreeformCoordinator(
     private fun flexibleWindowService(): Any? =
         OemReflection.readField(controller, "mFlexibleWindowManagerService")
 
-    /** 返回增强的触发通道：SystemUI 在边缘内滑触发动作时发来广播。 */
+    /** 侧滑扩展的触发通道：SystemUI 在边缘内滑触发动作时发来广播。 */
     private fun registerPredictiveBackObserver() {
         try {
             context.registerReceiver(
@@ -2109,7 +2109,7 @@ internal class ColorOsFreeformCoordinator(
     }
 
     /**
-     * 在「全屏」与「小窗」之间切换焦点应用（返回增强触发）。
+     * 在「全屏」与「小窗」之间切换焦点应用（侧滑扩展触发）。
      *
      * 按窗口状态分流，与扇形菜单同一套判断：
      *   - 全屏：`switchFocusedTaskToZoom` 就地变小窗，不重启 Activity；
@@ -2168,7 +2168,7 @@ internal class ColorOsFreeformCoordinator(
             false
         }
 
-    /** 返回增强的发起方只认 SystemUI、系统进程与模块自身。 */
+    /** 侧滑扩展的发起方只认 SystemUI、系统进程与模块自身。 */
     private fun isPredictiveBackSender(uid: Int): Boolean {
         if (uid < 0) return false
         if (uid == android.os.Process.SYSTEM_UID || uid == moduleUid()) return true
@@ -2605,7 +2605,7 @@ internal class ColorOsFreeformCoordinator(
         /** 与 FloatHandleView.REASON_START_FREEFORM_ONSINGLE_TAPUP 一致。 */
         const val BALL_OPEN_REASON = "onSingleTapUp"
 
-        /** 返回增强触发后的形态切换重试：转场未结束时第一次可能切不动。 */
+        /** 侧滑扩展触发后的形态切换重试：转场未结束时第一次可能切不动。 */
         const val PREDICTIVE_BACK_RETRY_MAX = 2
         const val PREDICTIVE_BACK_RETRY_DELAY_MS = 160L
 

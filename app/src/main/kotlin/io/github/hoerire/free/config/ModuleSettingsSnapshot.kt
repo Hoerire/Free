@@ -42,9 +42,11 @@ internal data class ModuleSettingsSnapshot(
     val verboseLogEnabled: Boolean = ModulePreferences.DEFAULT_VERBOSE_LOG,
     /** 这些应用在前台时不触发扇形菜单。 */
     val blacklistPackages: List<String> = emptyList(),
+    /** 横屏时小窗固定落在哪一侧；默认跟随系统。 */
+    val zoomLandscapeSide: LandscapeZoomSide = LandscapeZoomSide.FollowSystem,
     /** 小窗扩展·数量上限：系统允许的最大小窗数至少要达到该值。 */
     val zoomMaxWindowCount: Int = ModulePreferences.DEFAULT_ZOOM_MAX_WINDOW_COUNT,
-    /** 贴边浮标同时保留的个数（2–10）。 */
+    /** 贴边浮标同时保留的个数（2–12）。 */
     val floatHandleMaxCount: Int = ModulePreferences.DEFAULT_FLOAT_HANDLE_MAX_COUNT,
     /** 小窗扩展·解除应用准入：isSupportFlexibleWindow 一律放行。 */
     val zoomAllowAnyApp: Boolean = ModulePreferences.DEFAULT_ZOOM_ALLOW_ANY_APP,
@@ -78,9 +80,9 @@ internal data class ModuleSettingsSnapshot(
     val hideZoomInRecents: Boolean = ModulePreferences.DEFAULT_HIDE_ZOOM_IN_RECENTS,
     /** 长按迷你窗静音，再次长按恢复；普通小窗不响应。 */
     val longPressMuteEnabled: Boolean = ModulePreferences.DEFAULT_LONG_PRESS_MUTE,
-    /** 返回增强：边缘内滑后上滑切小窗、下拉打开更多。 */
+    /** 侧滑扩展：边缘内滑后上滑切小窗、下拉打开更多。 */
     val predictiveBackEnabled: Boolean = ModulePreferences.DEFAULT_PREDICTIVE_BACK_ENABLED,
-    /** 返回增强的触发距离（dp）：内滑后上滑或下拉超过该距离才接管。 */
+    /** 侧滑扩展的触发距离（dp）：内滑后上滑或下拉超过该距离才接管。 */
     val predictiveBackSwipeDistanceDp: Int =
         ModulePreferences.DEFAULT_PREDICTIVE_BACK_SWIPE_DISTANCE_DP,
     /** 侧滑扩展的手势模式：上滑切窗+下滑更多 / 下滑切窗 / 下滑更多。 */
@@ -94,6 +96,12 @@ internal data class ModuleSettingsSnapshot(
     val panelHiddenPackages: List<String> = emptyList(),
     /** 贴边挂机：收成贴边浮标后保持应用继续运行。 */
     val floatKeepAlive: Boolean = ModulePreferences.DEFAULT_FLOAT_KEEP_ALIVE,
+    /**
+     * 自动贴边：这些应用回到桌面时自动收成贴边浮标（名单为空即关闭）。
+     *
+     * 与 [floatKeepAlive] 分开存：收成浮标由这里决定，收走之后还跑不跑由那份开关决定。
+     */
+    val autoDockPackages: List<String> = emptyList(),
     /** 扇形呼出后未选择任何条目时保持显示，不自动收起。 */
     val radialKeepOpen: Boolean = ModulePreferences.DEFAULT_RADIAL_KEEP_OPEN,
     /** 扇形交互总开关：关闭后底角不再呼出扇形菜单，其余配置保留。 */
@@ -101,10 +109,12 @@ internal data class ModuleSettingsSnapshot(
     /** 小窗交互总开关：关闭后所有小窗改写一并退出，其余配置保留。 */
     val zoomInteractionEnabled: Boolean = ModulePreferences.DEFAULT_ZOOM_INTERACTION_ENABLED,
     /**
-     * 解除限制：给内容传送门里没有系统白名单的应用补一份通用配置，
-     * 任意页面都能长按拖起文字/图片。只影响「能不能拖」，不参与「拖给谁」。
+     * 内容拖拽：给名单里的应用补一份通用拖拽配置，任意页面都能长按拖起文字/图片。
+     * 只影响「能不能拖」，不参与「拖给谁」；名单为空即关闭，不再默认全局生效。
      */
-    val dragUnlockEnabled: Boolean = ModulePreferences.DEFAULT_DRAG_UNLOCK,
+    val dragUnlockPackages: List<String> = emptyList(),
+    /** 边缘拖动：把小窗拖到屏幕左右边缘时变成全屏。 */
+    val edgeDragFullScreen: Boolean = ModulePreferences.DEFAULT_EDGE_DRAG_FULLSCREEN,
     /** 流光特效：选中项外沿的动效（光圈、星头、轨迹），独立于选中光圈。 */
     val radialShimmerEnabled: Boolean = ModulePreferences.DEFAULT_RADIAL_SHIMMER_ENABLED,
     /** 选中流光的参数（速度、亮度、宽度、发光等）。 */
@@ -151,6 +161,13 @@ internal data class ModuleSettingsSnapshot(
     val statusScrollRounds: Int = ModulePreferences.DEFAULT_STATUS_SCROLL_ROUNDS,
     /** 滚动速度（像素/秒）。 */
     val statusScrollSpeed: Int = ModulePreferences.DEFAULT_STATUS_SCROLL_SPEED,
+    /**
+     * 滚动通知的过滤列表：表内应用的通知不进状态栏滚动，其余应用照常滚。
+     *
+     * 键与气泡白名单同一套（主应用 `包名`、分身 `包名#userId`），与 [statusScrollEnabled]
+     * 互相独立：关掉滚动时这份名单原样保留。
+     */
+    val statusScrollExcluded: List<String> = emptyList(),
     /** 免打扰：当前应用 / 游戏 / 锁屏与息屏三种场景各自独立。 */
     val bubbleSkipForeground: Boolean = ModulePreferences.DEFAULT_BUBBLE_SKIP_FOREGROUND,
     val bubbleSkipGame: Boolean = ModulePreferences.DEFAULT_BUBBLE_SKIP_GAME,
@@ -196,18 +213,21 @@ internal data class ModuleSettingsSnapshot(
         get() = zoomInteractionActive && zoomLaunchClipboard
     val autoCloseWindowEffective: Boolean
         get() = zoomInteractionActive && autoCloseWindow
-    /** 隐藏卡片属于「系统增强」，只跟模块总开关走。 */
-    val hideZoomInRecentsEffective: Boolean get() = enabled && hideZoomInRecents
-    /** 贴边挂机属于「系统增强」，只跟模块总开关走。 */
-    val floatKeepAliveEffective: Boolean get() = enabled && floatKeepAlive
+    // 隐藏卡片 / 贴边挂机 / 自动贴边 / 横屏小窗位置都搬进了「小窗交互」，
+    // 因此全部跟着「启用交互」总闸走：总闸关掉时，灰掉的不只是界面，行为也一起停。
+    val hideZoomInRecentsEffective: Boolean get() = zoomInteractionActive && hideZoomInRecents
+    val floatKeepAliveEffective: Boolean get() = zoomInteractionActive && floatKeepAlive
+    val autoDockActive: Boolean get() = zoomInteractionActive && autoDockPackages.isNotEmpty()
+    val zoomLandscapeSideActive: Boolean
+        get() = zoomInteractionActive && zoomLandscapeSide != LandscapeZoomSide.FollowSystem
     /** 长按迷你窗跟小窗交互总闸走（属于「手势交互」页）。 */
     val longPressMuteEffective: Boolean get() = zoomInteractionActive && longPressMuteEnabled
-    /** 返回增强只跟模块总开关走：模块停用时等同关闭。 */
+    /** 侧滑扩展只跟模块总开关走：模块停用时等同关闭。 */
     val predictiveBackEffective: Boolean get() = enabled && predictiveBackEnabled
 
 
 
-    /** 返回增强的触发距离（dp），已按上下限钳位。 */
+    /** 侧滑扩展的触发距离（dp），已按上下限钳位。 */
     val predictiveBackSwipeDistanceDpEffective: Int
         get() =
             ModulePreferences.coercePredictiveBackSwipeDistanceDp(predictiveBackSwipeDistanceDp)
@@ -218,8 +238,11 @@ internal data class ModuleSettingsSnapshot(
     /** 横条沉浸属于「系统增强」，只跟模块总开关走。 */
     val externalHandleEffective: Boolean get() = enabled && externalHandleEnabled
 
-    /** 解除限制属于「系统增强」，只跟模块总开关走。 */
-    val dragUnlockActive: Boolean get() = enabled && dragUnlockEnabled
+    /** 内容拖拽属于「系统增强」，只跟模块总开关走；名单为空即关。 */
+    val dragUnlockActive: Boolean get() = enabled && dragUnlockPackages.isNotEmpty()
+
+    /** 边缘拖动属于「系统增强」，只跟模块总开关走。 */
+    val edgeDragFullScreenActive: Boolean get() = enabled && edgeDragFullScreen
 
     /** 气泡通知是否生效：模块总开关 ×「气泡通知」。 */
     val bubbleActive: Boolean get() = enabled && bubbleEnabled
@@ -336,6 +359,11 @@ internal data class ModuleSettingsSnapshot(
                 ModulePreferences.KEY_PANEL_HIDDEN_PACKAGES,
                 ModulePreferences.encodePackages(panelHiddenPackages),
             )
+            .putString(
+                ModulePreferences.KEY_AUTO_DOCK_PACKAGES,
+                ModulePreferences.encodePackages(autoDockPackages),
+            )
+            .putInt(ModulePreferences.KEY_ZOOM_LANDSCAPE_SIDE, zoomLandscapeSide.storedValue)
             // 按时长触发、三选一动作的旧键：升级后清掉，避免残留值干扰排查。
             .remove(ModulePreferences.LEGACY_KEY_PREDICTIVE_BACK_HOLD_MS)
             .remove(ModulePreferences.LEGACY_KEY_PREDICTIVE_BACK_ACTION)
@@ -343,7 +371,13 @@ internal data class ModuleSettingsSnapshot(
             .remove(ModulePreferences.LEGACY_KEY_ZOOM_INTERACTION_ENABLED)
             .putBoolean(ModulePreferences.KEY_RADIAL_INTERACTION_ENABLED, radialInteractionEnabled)
             .putBoolean(ModulePreferences.KEY_ZOOM_INTERACTION_ENABLED, zoomInteractionEnabled)
-            .putBoolean(ModulePreferences.KEY_DRAG_UNLOCK, dragUnlockEnabled)
+            .putString(
+                ModulePreferences.KEY_DRAG_UNLOCK_PACKAGES,
+                ModulePreferences.encodePackages(dragUnlockPackages),
+            )
+            .putBoolean(ModulePreferences.KEY_EDGE_DRAG_FULLSCREEN, edgeDragFullScreen)
+            // 旧的总开关：不再写，升级后清掉。
+            .remove(ModulePreferences.KEY_DRAG_UNLOCK)
             .putBoolean(ModulePreferences.KEY_RADIAL_KEEP_OPEN, radialKeepOpen)
             .putBoolean(ModulePreferences.KEY_RADIAL_SHIMMER_ENABLED, radialShimmerEnabled)
             .putString(ModulePreferences.KEY_RADIAL_SHIMMER, radialShimmer.encode())
@@ -408,6 +442,10 @@ internal data class ModuleSettingsSnapshot(
             .putInt(
                 ModulePreferences.KEY_STATUS_SCROLL_SPEED,
                 ModulePreferences.coerceStatusScrollSpeed(statusScrollSpeed),
+            )
+            .putString(
+                ModulePreferences.KEY_STATUS_SCROLL_EXCLUDED,
+                ModulePreferences.encodeBubbleKeys(statusScrollExcluded),
             )
             .putInt(
                 ModulePreferences.KEY_BUBBLE_PREVIEW_TIMEOUT_SECONDS,
@@ -733,6 +771,16 @@ internal data class ModuleSettingsSnapshot(
                 panelHiddenPackages = ModulePreferences.decodePackages(
                     preferences.getString(ModulePreferences.KEY_PANEL_HIDDEN_PACKAGES, null),
                 ),
+                autoDockPackages = ModulePreferences.decodePackages(
+                    preferences.getString(ModulePreferences.KEY_AUTO_DOCK_PACKAGES, null),
+                ),
+                zoomLandscapeSide =
+                    LandscapeZoomSide.fromStoredValue(
+                        preferences.getInt(
+                            ModulePreferences.KEY_ZOOM_LANDSCAPE_SIDE,
+                            LandscapeZoomSide.FollowSystem.storedValue,
+                        ),
+                    ),
                 radialKeepOpen = preferences.getBoolean(
                     ModulePreferences.KEY_RADIAL_KEEP_OPEN,
                     ModulePreferences.DEFAULT_RADIAL_KEEP_OPEN,
@@ -745,9 +793,12 @@ internal data class ModuleSettingsSnapshot(
                     ModulePreferences.KEY_ZOOM_INTERACTION_ENABLED,
                     ModulePreferences.DEFAULT_ZOOM_INTERACTION_ENABLED,
                 ),
-                dragUnlockEnabled = preferences.getBoolean(
-                    ModulePreferences.KEY_DRAG_UNLOCK,
-                    ModulePreferences.DEFAULT_DRAG_UNLOCK,
+                dragUnlockPackages = ModulePreferences.decodePackages(
+                    preferences.getString(ModulePreferences.KEY_DRAG_UNLOCK_PACKAGES, null),
+                ),
+                edgeDragFullScreen = preferences.getBoolean(
+                    ModulePreferences.KEY_EDGE_DRAG_FULLSCREEN,
+                    ModulePreferences.DEFAULT_EDGE_DRAG_FULLSCREEN,
                 ),
                 radialShimmerEnabled = preferences.getBoolean(
                     ModulePreferences.KEY_RADIAL_SHIMMER_ENABLED,
@@ -843,6 +894,9 @@ internal data class ModuleSettingsSnapshot(
                         ModulePreferences.KEY_STATUS_SCROLL_SPEED,
                         ModulePreferences.DEFAULT_STATUS_SCROLL_SPEED,
                     ),
+                ),
+                statusScrollExcluded = ModulePreferences.decodeBubbleKeys(
+                    preferences.getString(ModulePreferences.KEY_STATUS_SCROLL_EXCLUDED, null),
                 ),
                 suggestionsEnabled = preferences.getBoolean(
                     ModulePreferences.KEY_SUGGESTIONS_ENABLED,

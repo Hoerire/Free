@@ -53,6 +53,13 @@ internal class StatusTickerController(
     fun onPosted(sbn: StatusBarNotification, payload: BubblePayload) {
         val config = settings()
         if (!config.statusScrollActive) return
+        val packageName = sbn.packageName ?: return
+        // 过滤列表：表内应用的通知不进滚动。判定放在拼文案之前，过滤掉的连文字都不用拼。
+        val identity = BubbleIdentity(packageName, sbn.userId, sbn.key)
+        if (!config.statusScrollAccepts(identity)) {
+            logger("STATUS_TICKER_SKIP_EXCLUDED_" + identity.whitelistKey, null)
+            return
+        }
         val text = buildText(payload)
         if (text.isBlank()) return
         // 同一条通知的更新不打断；正在滚另一条时排队，让当前这一轮先走完。

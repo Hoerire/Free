@@ -201,6 +201,16 @@ internal object ModulePreferences {
      */
     const val KEY_PANEL_HIDDEN_PACKAGES = "panel_hidden_packages_v1"
 
+    /** 横屏时小窗固定落在一侧；只在横屏生效，见 [LandscapeZoomSide]。 */
+    const val KEY_ZOOM_LANDSCAPE_SIDE = "zoom_landscape_side_v1"
+
+    /**
+     * 自动贴边：这些应用在「回到桌面」时自动收成贴边浮标。
+     *
+     * 没有独立开关——名单为空就是关闭。只在回桌面这一下动作，切到其它应用不触发。
+     */
+    const val KEY_AUTO_DOCK_PACKAGES = "auto_dock_packages_v1"
+
     /** 打开面板时起手的位置：从哪一侧起手、按下的坐标（像素）。 */
     const val EXTRA_GESTURE_SIDE = "gesture_side_left"
     const val EXTRA_GESTURE_X = "gesture_x"
@@ -233,13 +243,16 @@ internal object ModulePreferences {
     const val KEY_ZOOM_INTERACTION_ENABLED = "zoom_interaction_enabled_v1"
 
     /**
-     * 解除限制（默认开）：解除内容传送门的长按拖拽准入限制。
-     *
-     * 系统的长按拖拽只对 sys_view_drag_list.xml 里登记过的包 + Activity + 控件类名生效，
-     * 没登记的包连配置都拿不到。打开后 system_server 侧补一份通用白名单，
-     * 让任意应用、任意页面都能长按拖起内容。只改「能不能拖」，不改「拖给谁」。
+     * 旧键：全局「自由拖拽」开关。**已删除，只在写盘时清掉**，不要重新读取——
+     * 全局补白名单会随 provider 数放大 binder 载荷，部分机型/应用在 bind 阶段直接崩。
      */
     const val KEY_DRAG_UNLOCK = "drag_unlock_enabled_v1"
+
+    /** 边缘拖动：把小窗拖到屏幕左右边缘时变成全屏（系统默认只有下拉底部会变全屏）。 */
+    const val KEY_EDGE_DRAG_FULLSCREEN = "edge_drag_fullscreen_v1"
+
+    /** 内容拖拽：给这些应用补通用拖拽白名单（名单为空即关闭，不再默认全局生效）。 */
+    const val KEY_DRAG_UNLOCK_PACKAGES = "drag_unlock_packages_v1"
 
     const val KEY_RADIAL_KEEP_OPEN = "radial_keep_open"
 
@@ -314,6 +327,13 @@ internal object ModulePreferences {
     const val KEY_STATUS_SCROLL_ROUNDS = "status_scroll_rounds_v1"
     /** 滚动速度（像素/秒）：恒定速度，不随文本长度变化。 */
     const val KEY_STATUS_SCROLL_SPEED = "status_scroll_speed_px_v1"
+    /**
+     * 滚动通知的过滤列表：表内应用的通知不进状态栏滚动。
+     *
+     * 键与气泡白名单同一套，读写复用 [decodeBubbleKeys] / [encodeBubbleKeys]：
+     * 主应用是 `包名`，分身是 `包名#userId`——分身与主应用同包名，只能靠这一位区分。
+     */
+    const val KEY_STATUS_SCROLL_EXCLUDED = "status_scroll_excluded_v1"
     /**
      * 免打扰：三种场景下不出气泡与建议。
      *
@@ -493,18 +513,19 @@ internal object ModulePreferences {
     const val MIN_ZOOM_MAX_WINDOW_COUNT = 1
     /** 上限 12：再多窗口在手机上已无法同时看清，但放开到 12 不增加任何栈内风险。 */
     const val MAX_ZOOM_MAX_WINDOW_COUNT = 12
-    /** 贴边数量：系统手机默认 2 个，只放大不缩小，上限 10。 */
+    /** 贴边数量：系统手机默认 2 个，只放大不缩小，上限 12。 */
     const val DEFAULT_FLOAT_HANDLE_MAX_COUNT = 2
     const val MIN_FLOAT_HANDLE_MAX_COUNT = 2
-    const val MAX_FLOAT_HANDLE_MAX_COUNT = 10
+    const val MAX_FLOAT_HANDLE_MAX_COUNT = 12
     const val DEFAULT_ZOOM_ALLOW_ANY_APP = false
+
+    /** 边缘拖动默认关闭：属于增强交互，用户主动打开才接管。 */
+    const val DEFAULT_EDGE_DRAG_FULLSCREEN = false
     const val DEFAULT_RADIAL_KEEP_OPEN = false
     /** 扇形交互默认开启：不想要扇形菜单的用户在设置里关掉即可。 */
     const val DEFAULT_RADIAL_INTERACTION_ENABLED = true
     /** 小窗交互默认开启：与其它同类模块冲突时由用户主动关掉。 */
     const val DEFAULT_ZOOM_INTERACTION_ENABLED = true
-    /** 解除限制默认开启：原先随模块总开关生效，做成开关后保持原有行为不变。 */
-    const val DEFAULT_DRAG_UNLOCK = true
     const val DEFAULT_RADIAL_SHIMMER_ENABLED = false
     /** 呼吸特效默认开启：幅度只有 ±2%，不喜欢可以在外观细节里关掉。 */
     const val DEFAULT_RADIAL_BREATHING_ENABLED = true

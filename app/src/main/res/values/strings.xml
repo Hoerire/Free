@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">Free</string>
     <!-- API 102 规范：模块名称取 android:label，模块描述取 android:description。 -->
-    <string name="module_description">为 ColorOS 启用 Flyme 的交互手势，支持 ColorOS 15~17</string>
+    <string name="module_description">为 ColorOS 提供小窗增强手势与浮窗能力，支持 ColorOS 15~17</string>
 
     <string name="framework_service_title">框架服务</string>
     <string name="framework_status_waiting">等待连接</string>
@@ -66,13 +66,29 @@
     <string name="panel_hidden_add_summary">选中要隐藏的应用，它不再出现在「更多」面板</string>
     <string name="panel_hidden_empty_title">未隐藏任何应用</string>
     <string name="panel_hidden_empty_summary">添加后，这些应用不会出现在「更多」面板的收藏、最近与全部列表里</string>
-    <string name="drag_unlock_title">自由拖拽</string>
-    <string name="drag_unlock_summary">解除内容传送门的白名单限制，任意页面都能长按拖起内容</string>
+    <string name="edge_drag_title">边缘拖动</string>
+    <string name="edge_drag_summary">小窗拖到屏幕左右边缘时变成全屏（默认只有下拉底部会变全屏）</string>
+    <string name="drag_unlock_title">内容拖拽</string>
+    <string name="drag_unlock_summary">解除官方白名单限制，自定义添加任意应用</string>
+    <string name="drag_unlock_summary_active">已对 %1$d 个应用生效</string>
+    <string name="drag_unlock_screen_title">内容拖拽</string>
+    <string name="drag_unlock_subtitle">只对名单里的应用生效</string>
+    <string name="drag_unlock_add_action">添加应用</string>
+    <string name="drag_unlock_add_summary">长按任意页面的文字或图片都能拖起</string>
+    <string name="drag_unlock_empty_title">未选择应用</string>
+    <string name="drag_unlock_empty_summary">名单为空即关闭</string>
     <string name="status_scroll_title">滚动通知</string>
     <string name="status_scroll_entry_on">开 · %1$d 轮 · %2$d px/秒</string>
+    <string name="status_scroll_filter_title">过滤列表</string>
+    <string name="status_scroll_filter_summary">表内应用的通知不在状态栏滚动</string>
+    <string name="status_scroll_filter_entry_on">已过滤 %1$d 个应用</string>
+    <string name="status_scroll_filter_screen_title">过滤列表</string>
+    <string name="status_scroll_filter_add_action">添加应用</string>
+    <string name="status_scroll_filter_add_summary">选中的应用，通知不再进状态栏滚动</string>
+    <string name="status_scroll_filter_empty_title">未过滤任何应用</string>
+    <string name="status_scroll_filter_empty_summary">添加后，这些应用的通知不会在状态栏滚动显示</string>
     <string name="predictive_back_entry_on">开 · 滑动 %1$d dp</string>
     <string name="float_group_title">贴边浮标</string>
-    <string name="float_entry_on">贴边挂机已开 · 最多 %1$d 个</string>
     <string name="entry_off">关</string>
     <string name="blacklist_title">排除列表</string>
     <string name="blacklist_summary">排除列表内的应用在前台时停用模块全部功能，离开后自动恢复</string>
@@ -167,10 +183,23 @@
     <string name="predictive_back_mode_more_up">上滑更多 · 下滑切窗</string>
     <string name="predictive_back_swipe_distance_title">滑动距离</string>
     <string name="predictive_back_swipe_distance_summary">内滑后滑动超过这个距离才触发；方向与动作由上面的手势模式决定</string>
+    <string name="zoom_landscape_side_title">小窗位置</string>
+    <string name="zoom_landscape_side_summary">横屏时小窗固定落在哪一侧；竖屏与跟随系统不动</string>
+    <string name="zoom_landscape_side_follow">跟随系统</string>
+    <string name="zoom_landscape_side_left">靠左</string>
+    <string name="zoom_landscape_side_right">靠右</string>
+    <string name="auto_dock_title">自动贴边</string>
+    <string name="auto_dock_summary">上滑返回桌面时，自动收成贴边浮标继续运行</string>
+    <string name="auto_dock_screen_title">自动贴边</string>
+    <string name="auto_dock_subtitle">只对全屏应用生效：上滑返回桌面时收成贴边浮标。已经是小窗的不接管；收走之后还跑不跑由上面的「贴边挂机」决定</string>
+    <string name="auto_dock_add_action">添加应用</string>
+    <string name="auto_dock_add_summary">选中的应用，上滑返回桌面时自动收成贴边浮标</string>
+    <string name="auto_dock_empty_title">未选择应用</string>
+    <string name="auto_dock_empty_summary">添加后，这些应用上滑返回桌面时自动贴边；小窗状态不触发</string>
     <string name="float_keep_alive_title">贴边挂机</string>
     <string name="float_keep_alive_summary">收成贴边浮标后保持应用继续运行</string>
     <string name="float_handle_max_title">贴边数量</string>
-    <string name="float_handle_max_summary">同时保留的浮标个数，最多 10 个</string>
+    <string name="float_handle_max_summary">同时保留的浮标个数，最多 12 个</string>
     <string name="handle_swipe_up_to_mini_title">快速上滑</string>
     <string name="handle_swipe_up_to_mini_summary">底部横条上滑，切为迷你浮窗</string>
     <string name="external_handle_title">横条沉浸</string>
@@ -285,7 +314,7 @@
     <string name="bubble_preview_alpha_title">浮层不透明度</string>
     <string name="bubble_preview_alpha_summary">35–100，越高越实心</string>
 
-    <string name="bubble_status_scroll_enabled_title">滚动显示通知</string>
+    <string name="bubble_status_scroll_enabled_title">接管通知</string>
     <string name="bubble_status_scroll_enabled_summary">通知内容在状态栏时钟位置滚动显示</string>
     <string name="bubble_status_scroll_rounds_title">滚动轮数</string>
     <string name="bubble_status_scroll_rounds_summary">1–5 轮；一轮就是整条文字从右往左滚完一遍</string>

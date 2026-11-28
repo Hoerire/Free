@@ -6,9 +6,11 @@ import io.github.hoerire.free.log.ModuleLog
 import io.github.hoerire.free.log.VerboseLog
 
 /**
- * 解除限制：解除内容传送门的长按拖拽准入限制。
+ * 内容拖拽：解除内容传送门的长按拖拽准入限制。
  *
- * 由「系统增强 → 解除限制」开关控制，默认开启；关掉后立刻退回原厂规则。
+ * 由「系统增强 → 内容拖拽」的应用名单控制（**默认关闭**）：只有名单里的包会被改写，
+ * 其余应用保持原厂规则。全局补白名单会随 provider 数放大 binder 载荷，部分机型/应用
+ * 在 bind 阶段直接崩，因此改成按应用生效。
  *
  * 反编译结论（oplus-services.jar / oplus-framework.jar）：
  *   应用进程 bind 时 OplusViewDragSystemServer#preBindApplication 向
@@ -92,6 +94,9 @@ internal class DragUnlockHookInstaller(
                     if (environment.inGameMode) return@intercept original
                     val packageName = chain.getArg(0) as? String
                     if (!isRewritable(packageName)) return@intercept original
+                    // 只给用户选中的应用补配置：全局补会随 provider 数放大 binder 载荷，
+                    // 部分机型/应用在 bind 阶段直接崩，逐个排查代价太高。
+                    if (!isSelected(packageName)) return@intercept original
                     runCatching { withGenericEntry(packageName as String, original) }
                         .getOrElse { exception ->
                             // 逐次调用的诊断，只在详细日志开启时输出，避免刷屏。
@@ -127,6 +132,7 @@ internal class DragUnlockHookInstaller(
                     if (environment.inGameMode) return@intercept original
                     val packageName = chain.getArg(0) as? String
                     if (!isRewritable(packageName)) return@intercept original
+                    if (!isSelected(packageName)) return@intercept original
                     buildGenericXml(packageName as String)
                 }
             1
@@ -138,6 +144,10 @@ internal class DragUnlockHookInstaller(
 
     private fun isRewritable(packageName: String?): Boolean =
         !packageName.isNullOrEmpty() && packageName !in EXCLUDED_PACKAGES
+
+    /** 名单里的应用才生效；名单为空时 dragUnlockActive 已经为假，这里只做二次确认。 */
+    private fun isSelected(packageName: String?): Boolean =
+        packageName != null && configuration.snapshot.dragUnlockPackages.contains(packageName)
 
     /**
      * 在原有白名单末尾追加通用条目。
@@ -301,7 +311,7 @@ internal class DragUnlockHookInstaller(
         const val MAX_APPEND_ACTIVITIES = 8
 
         /**
-         * 不参与「解除限制」的包。
+         * 不参与「内容拖拽」的包。
          *
          * 桌面与系统界面以长按承担排序/编辑操作，其图标大量由 ImageView/TextView 承载；
          * 纳入白名单会与系统自身的长按手势冲突。设置页同理，长按条目易被误触。

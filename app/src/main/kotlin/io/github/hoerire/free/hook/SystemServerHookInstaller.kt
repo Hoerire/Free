@@ -16,6 +16,7 @@ internal class SystemServerHookInstaller(
     private val environment = ModuleEnvironmentState(configuration) { code, exception ->
         ModuleLog.warn(code, exception)
     }
+    private val autoDock = AutoDockHook(configuration)
 
     fun install(classLoader: ClassLoader) {
         // 本进程内其他类（如 ColorOsFreeformLauncher）的诊断日志同样写入 LSPosed 日志文件。
@@ -26,6 +27,8 @@ internal class SystemServerHookInstaller(
         // 长按静音的回收：任务被划掉/被杀/被系统清理时，把该应用的音量放回去。
         WindowMuteHook(module).install(classLoader)
         FloatKeepAliveHook(module, configuration).install(classLoader)
+        // 横屏小窗位置：只改系统算出来的落点，不动尺寸与动画。
+        LandscapeZoomSideHook(module, configuration).install(classLoader)
         HandleSwipeUpHookInstaller(module, configuration, environment).install(classLoader)
         // 横条沉浸（小窗交互 → 横条沉浸）：只调系统自身的显隐入口，不建视图、不改布局参数。
         ExternalHandleHookInstaller(module, configuration).install(classLoader)
@@ -50,7 +53,9 @@ internal class SystemServerHookInstaller(
         // 表现为穿透到下层应用。角区触摸改由 SystemUI 的受信任 SPY 热区吞下。
 
         CenterZoomWindowHook(module, configuration).install(classLoader)
-        // 解除限制：给内容传送门里系统没登记的应用补通用白名单。模块启用即生效。
+        // 系统增强：小窗拖到左右边缘变全屏（放开系统本来就有的侧边缩放与最大化判定）。
+        EdgeDragFullScreenHook(module, configuration).install(classLoader)
+        // 内容拖拽：给名单里的应用补通用拖拽白名单（名单为空即关，只改「能不能拖」）。
         DragUnlockHookInstaller(module, configuration, environment).install(classLoader)
         // 系统 Home 手势的指针监听器不认挖角，也不受抢流影响，单独在入口吞掉角区按下。
         SystemGestureSuppressor(module, configuration).install(classLoader)
@@ -91,6 +96,7 @@ internal class SystemServerHookInstaller(
                     val result = chain.proceed()
                     val controller = chain.thisObject
                     if (controller != null && bound.compareAndSet(false, true)) {
+                        autoDock.attach(controller)
                         ColorOsFreeformCoordinator(
                             controller = controller,
                             classLoader = classLoader,
@@ -134,6 +140,8 @@ internal class SystemServerHookInstaller(
                         val foregroundPackage =
                             (OemReflection.readField(record, "packageName") as? String) ?: component?.packageName
                         environment.updateForeground(foregroundPackage, component?.className)
+                        // 自动贴边：新前台是桌面、上一个前台在名单里时才收（内部有 isHome 判定）。
+                        autoDock.onForeground(foregroundPackage, environment.previousForeground())
                     }
                     chain.proceed()
                 }

@@ -16,7 +16,6 @@ import androidx.compose.material.icons.rounded.ElectricalServices
 import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LockOpen
-import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.SwipeRight
 import androidx.compose.material.icons.rounded.Tune
@@ -78,7 +77,6 @@ internal fun ControlScreen(
     onNavigateToZoomOptions: () -> Unit,
     onNavigateToSystemEnhance: () -> Unit,
     onNavigateToAbout: () -> Unit,
-    onNavigateToBubble: () -> Unit,
 ) {
     val featuresEnabled = state.settingsEditable && state.settings.enabled
 
@@ -106,7 +104,6 @@ internal fun ControlScreen(
                             onNavigateToZoomOptions = onNavigateToZoomOptions,
                             onNavigateToSystemEnhance = onNavigateToSystemEnhance,
                             onNavigateToBlacklist = onNavigateToBlacklist,
-                            onNavigateToBubble = onNavigateToBubble,
                         )
                     }
             item(key = "about") {
@@ -124,7 +121,6 @@ private fun EntryCard(
     onNavigateToZoomOptions: () -> Unit,
     onNavigateToSystemEnhance: () -> Unit,
     onNavigateToBlacklist: () -> Unit,
-    onNavigateToBubble: () -> Unit,
 ) {
     SettingsGroup(modifier = Modifier.fillMaxWidth()) {
         ArrowPreference(
@@ -147,14 +143,6 @@ private fun EntryCard(
             onClick = onNavigateToSystemEnhance,
             enabled = featuresEnabled,
             startAction = { PreferenceIcon(Icons.Rounded.Tune, featuresEnabled) },
-        )
-        // 气泡入口：具体开关与滑杆都在二级页里。
-        ArrowPreference(
-            title = stringResource(R.string.bubble_feature_title),
-            summary = stringResource(R.string.bubble_feature_summary),
-            onClick = onNavigateToBubble,
-            enabled = featuresEnabled,
-            startAction = { PreferenceIcon(Icons.Rounded.Notifications, featuresEnabled) },
         )
         // 排除列表是「整体停用」，与上面的功能入口不同类，固定排在最后。
         ArrowPreference(
