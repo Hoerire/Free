@@ -111,6 +111,7 @@ class MainActivity : ComponentActivity() {
                     onStatusScrollRoundsChange = repository::setStatusScrollRounds,
                     onStatusScrollSpeedChange = repository::setStatusScrollSpeed,
                     onZoomExcludedChange = repository::setZoomExcludedPackages,
+                    onPanelHiddenChange = repository::setPanelHiddenPackages,
                     updateFlow = updateChecker.state,
                     onCheckUpdate = { updateChecker.check(force = true) },
                     onDismissUpdate = updateChecker::dismiss,

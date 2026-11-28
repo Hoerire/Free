@@ -257,13 +257,25 @@ internal object FavoriteGroupInjector {
         }
         val recent = recentItems(loader, context)
         val head = makeTitle(loader, null, "收藏")
-        val recentTitle = if (recent.isNotEmpty()) makeTitle(loader, null, "最近") else null
-        val out = ArrayList<Any?>(picked.size + recent.size + 2)
+        // 收藏区先过滤隐藏应用，再用它的别名去给「最近」去重：
+        // 收藏里已经出现过的条目不该在最近里再出现一次。
+        val favoriteRows = dropHidden(picked)
+        val favoriteAliases = favoriteRows.mapNotNull { aliasOf(it) }
+        val recentRows = dropHidden(recent)
+        val recentKept = keepByAlias(
+            recentRows,
+            io.github.hoerire.free.logic.PanelListPolicy.dedupeRecent(
+                recentRows.mapNotNull { aliasOf(it) },
+                favoriteAliases,
+            ),
+        )
+        val recentTitle = if (recentKept.isNotEmpty()) makeTitle(loader, null, "最近") else null
+        val out = ArrayList<Any?>(favoriteRows.size + recentKept.size + 2)
         head?.let { out.add(it) }
-        out.addAll(picked)
+        out.addAll(favoriteRows)
         if (recentTitle != null) {
             out.add(recentTitle)
-            out.addAll(recent)
+            out.addAll(recentKept)
         }
         d { "buildRows: 收藏=" + picked.size + " 最近=" + recent.size + " 合计=" + out.size }
         return out
@@ -375,6 +387,9 @@ internal object FavoriteGroupInjector {
             val groupTitles = items.filter { it?.javaClass?.simpleName == "TitleLabelData" }
             val head = groupTitles.getOrNull(0)
             val second = groupTitles.getOrNull(1)
+            // 收藏段过滤隐藏应用，并用它的别名给下面的「最近」去重（同 buildRows）。
+            val favoriteRows = dropHidden(picked)
+            val favoriteAliases = favoriteRows.mapNotNull { aliasOf(it) }
             // 最近打开：直接采用侧边栏基于使用情况访问权限统计出的名单。
             val recentItems = recentItems(loader, context)
             d { "picked=" + picked.size + " recent=" + recentItems.size +
@@ -382,12 +397,21 @@ internal object FavoriteGroupInjector {
             d { "recentAliases=" + recentItems.mapNotNull { aliasOf(it) } }
             val out = ArrayList<Any?>(picked.size + recentItems.size + 2)
             head?.let { out.add(it) }
-            out.addAll(picked)
-            if (recentItems.isNotEmpty()) {
+            out.addAll(favoriteRows)
+            // 最近：先过滤隐藏应用，再去掉收藏区已有的条目（扇形固定项不参与）。
+            val recentVisible = dropHidden(recentItems)
+            val recentKept = keepByAlias(
+                recentVisible,
+                io.github.hoerire.free.logic.PanelListPolicy.dedupeRecent(
+                    recentVisible.mapNotNull { aliasOf(it) },
+                    favoriteAliases,
+                ),
+            )
+            if (recentKept.isNotEmpty()) {
                 // 用和「收藏」完全相同的 viewType 新建标题，保证这个头一定按标题布局渲染。
                 val recentTitle = makeTitle(loader, head, "最近") ?: second
                 recentTitle?.let { out.add(it) }
-                out.addAll(recentItems)
+                out.addAll(recentKept)
             }
             // 标题后面没有条目会多出一个可展开箭头，空分组直接去掉。
             val cleaned = ArrayList<Any?>(out.size)
@@ -763,6 +787,70 @@ internal object FavoriteGroupInjector {
         bean.javaClass.getMethod("getAlias").invoke(bean) as? String
     } catch (_: Throwable) {
         null
+    }
+
+    /**
+     * 条目所属包名。
+     *
+     * 优先读 EntryBean 自己的 getPackageName；取不到时退回 alias 前缀：
+     * 主应用的 alias 是 包名#Activity，分身是 包名#userId，两种都在第一个 # 之前。
+     */
+    private fun packageOf(item: Any?): String? {
+        val fromBean = try {
+            val bean = item?.javaClass?.getMethod("getEntryBean")?.invoke(item)
+            bean?.javaClass?.getMethod("getPackageName")?.invoke(bean) as? String
+        } catch (_: Throwable) {
+            null
+        }
+        if (!fromBean.isNullOrEmpty()) return fromBean
+        return aliasOf(item)?.substringBefore('#')?.takeIf { it.isNotEmpty() }
+    }
+
+    /** 快照提供者：侧边栏进程安装钩子时注入（[bindSettings]），应用进程没有也不影响。 */
+    @Volatile
+    private var settings: (() -> io.github.hoerire.free.config.ModuleSettingsSnapshot)? = null
+
+    /**
+     * 绑定设置来源。
+     *
+     * 侧边栏进程里由 [io.github.hoerire.free.hook.SidebarHookInstaller] 传进来；
+     * 读的是同一个 [io.github.hoerire.free.hook.ProcessConfiguration] 快照，
+     * 因此改设置后不需要重开面板（广播会让快照重读）。
+     */
+    fun bindSettings(provider: () -> io.github.hoerire.free.config.ModuleSettingsSnapshot) {
+        settings = provider
+    }
+
+    /** 当前生效的隐藏名单（来自模块设置）。 */
+    private fun hiddenPackages(): List<String> =
+        settings?.invoke()?.panelHiddenPackages ?: emptyList()
+
+    /** 按允许的别名白名单保留条目，顺序跟随原列表。 */
+    private fun keepByAlias(items: List<Any?>, allowed: List<String>): List<Any?> {
+        if (allowed.isEmpty()) return emptyList()
+        val keep = allowed.toHashSet()
+        return items.filter { item ->
+            val alias = aliasOf(item) ?: return@filter true
+            keep.contains(alias)
+        }
+    }
+
+    /** 过滤掉隐藏应用；非应用条目（分组标题、工具）原样保留。 */
+    private fun dropHidden(items: List<Any?>): List<Any?> {
+        val hidden = hiddenPackages()
+        if (hidden.isEmpty()) return items
+        val out = ArrayList<Any?>(items.size)
+        var dropped = 0
+        for (item in items) {
+            // 只有应用条目带包名；标题与工具取不到，上游返回 null 时一律保留。
+            if (io.github.hoerire.free.logic.PanelListPolicy.isHidden(packageOf(item), hidden)) {
+                dropped++
+                continue
+            }
+            out.add(item)
+        }
+        if (dropped > 0) d { "hidden dropped=" + dropped }
+        return out
     }
 
     /** 按文件里的先后顺序返回 alias，只取工具(0)与应用/快捷入口(2)。 */

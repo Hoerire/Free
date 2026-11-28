@@ -344,9 +344,10 @@ class ModuleSettingsSnapshotTest {
     }
 
     @Test
-    fun zoomWindowCountClampsUpToTen() {
-        assertEquals(10, ModulePreferences.coerceZoomMaxWindowCount(11))
-        assertEquals(10, ModulePreferences.coerceZoomMaxWindowCount(10))
+    fun zoomWindowCountClampsToProductRange() {
+        // 上限 4.1 起放宽到 12（原 10）：断言跟着产品值走，别再写死旧上限。
+        assertEquals(12, ModulePreferences.coerceZoomMaxWindowCount(13))
+        assertEquals(12, ModulePreferences.coerceZoomMaxWindowCount(12))
         assertEquals(1, ModulePreferences.coerceZoomMaxWindowCount(0))
         // 数量与「启用交互」无关，只跟模块总开关走。
         val settings = ModuleSettingsSnapshot(enabled = true, zoomMaxWindowCount = 7)

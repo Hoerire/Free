@@ -299,3 +299,49 @@ private fun EntryIcon(entry: SelectableEntry?) {
         modifier = Modifier.padding(end = 6.dp).size(32.dp),
     )
 }
+
+/** 隐藏应用：不出现在「更多」面板里。 */
+@Composable
+internal fun PanelHiddenScreen(
+    state: FrameworkConnectionState,
+    apps: List<SelectableEntry>,
+    onBack: () -> Unit,
+    onAddApps: () -> Unit,
+    onPanelHiddenChange: (List<String>) -> Unit,
+) {
+    PackageListScreen(
+        state = state,
+        apps = apps,
+        onBack = onBack,
+        onAddApps = onAddApps,
+        packages = state.settings.panelHiddenPackages,
+        onChange = onPanelHiddenChange,
+        title = stringResource(R.string.panel_hidden_screen_title),
+        addAction = stringResource(R.string.panel_hidden_add_action),
+        addSummary = stringResource(R.string.panel_hidden_add_summary),
+        emptyTitle = stringResource(R.string.panel_hidden_empty_title),
+        emptySummary = stringResource(R.string.panel_hidden_empty_summary),
+    )
+}
+
+/** 隐藏应用的应用选择页。 */
+@Composable
+internal fun PanelHiddenPickerScreen(
+    state: FrameworkConnectionState,
+    apps: List<SelectableEntry>,
+    appsLoading: Boolean,
+    onBack: () -> Unit,
+    onPanelHiddenChange: (List<String>) -> Unit,
+) {
+    PackagePickerScreen(
+        state = state,
+        apps = apps,
+        appsLoading = appsLoading,
+        onBack = onBack,
+        packages = state.settings.panelHiddenPackages,
+        onChange = onPanelHiddenChange,
+        title = stringResource(R.string.panel_hidden_add_action),
+        addedLabel = stringResource(R.string.blacklist_added),
+    )
+}
+

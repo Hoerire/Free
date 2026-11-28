@@ -59,6 +59,13 @@
 
     <string name="system_enhance_title">系统增强</string>
     <string name="system_enhance_summary">增强部分系统功能，优化使用体验</string>
+    <string name="panel_hidden_title">隐藏应用</string>
+    <string name="panel_hidden_summary">选中的应用不再出现在「更多」面板里</string>
+    <string name="panel_hidden_screen_title">隐藏应用</string>
+    <string name="panel_hidden_add_action">添加应用</string>
+    <string name="panel_hidden_add_summary">选中要隐藏的应用，它不再出现在「更多」面板</string>
+    <string name="panel_hidden_empty_title">未隐藏任何应用</string>
+    <string name="panel_hidden_empty_summary">添加后，这些应用不会出现在「更多」面板的收藏、最近与全部列表里</string>
     <string name="drag_unlock_title">自由拖拽</string>
     <string name="drag_unlock_summary">解除内容传送门的白名单限制，任意页面都能长按拖起内容</string>
     <string name="status_scroll_title">滚动通知</string>
@@ -168,6 +175,7 @@
     <string name="handle_swipe_up_to_mini_summary">底部横条上滑，切为迷你浮窗</string>
     <string name="external_handle_title">横条沉浸</string>
     <string name="external_handle_summary">沉浸式隐藏全面屏手势和小窗指示条，触摸恢复显示</string>
+
 
     <string name="radial_apps_screen_title">扇形应用</string>
     <string name="radial_apps_screen_subtitle">最多添加七项，长按拖动调整顺序；第二组可在上方切换后单独配置</string>

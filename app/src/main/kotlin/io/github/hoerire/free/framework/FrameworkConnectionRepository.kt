@@ -157,6 +157,15 @@ internal class FrameworkConnectionRepository(private val context: Context) {
             it.copy(radialRadiusPercent = ModulePreferences.coerceRadialRadiusPercent(value))
         }
 
+    /** 隐藏应用：不出现在「更多」面板列表里。 */
+    fun setPanelHiddenPackages(packages: List<String>) =
+        updateSettings {
+            it.copy(
+                panelHiddenPackages =
+                    ModulePreferences.decodePackages(packages.joinToString("\n")),
+            )
+        }
+
     /** 滚动通知：最新通知在状态栏时钟位置滚动显示，与气泡总闸互不依赖。 */
     fun setStatusScrollEnabled(enabled: Boolean) =
         updateSettings { it.copy(statusScrollEnabled = enabled) }

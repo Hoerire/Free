@@ -62,6 +62,7 @@ internal fun SystemEnhanceScreen(
     onFloatKeepAliveChange: (Boolean) -> Unit,
     onFloatHandleMaxCountChange: (Int) -> Unit,
     onZoomMaxWindowCountChange: (Int) -> Unit,
+    onNavigateToPanelHidden: () -> Unit,
 ) {
     val pageStack = remember { mutableStateListOf(SystemEnhancePage.Overview) }
     val transition = remember { RouteTransitionState(SystemEnhancePage.Overview) }
@@ -161,6 +162,16 @@ internal fun SystemEnhanceScreen(
                                 onClick = { navigateTo(SystemEnhancePage.PredictiveBack) },
                                 enabled = enabled,
                                 startAction = { PreferenceIcon(Icons.Rounded.Gesture, enabled) },
+                            )
+                            // 隐藏应用：有列表要维护，按本页约定单开二级页。
+                            ArrowPreference(
+                                title = stringResource(R.string.panel_hidden_title),
+                                summary = panelHiddenSummary(state),
+                                onClick = onNavigateToPanelHidden,
+                                enabled = enabled,
+                                startAction = {
+                                    PreferenceIcon(Icons.Rounded.VisibilityOff, enabled)
+                                },
                             )
                             ArrowPreference(
                                 title = stringResource(R.string.float_group_title),
@@ -299,6 +310,13 @@ internal fun SystemEnhanceScreen(
                 }
         }
     }
+}
+
+/** 隐藏应用的入口行：报条数，没配就是「关」。 */
+@Composable
+private fun panelHiddenSummary(state: FrameworkConnectionState): String {
+    val count = state.settings.panelHiddenPackages.size
+    return if (count == 0) stringResource(R.string.entry_off) else "$count 个应用"
 }
 
 /** 入口行只报「现在是什么状态」，不复述二级页的说明文字。 */

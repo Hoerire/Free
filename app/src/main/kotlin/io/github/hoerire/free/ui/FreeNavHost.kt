@@ -40,6 +40,8 @@ internal sealed interface AppRoute {
 
     object ZoomLaunchScenes : AppRoute
 
+    object PanelHidden : AppRoute
+    object PanelHiddenPicker : AppRoute
     object ZoomExcluded : AppRoute
 
     object ZoomExcludedPicker : AppRoute
@@ -122,6 +124,7 @@ internal fun FreeNavHost(
     onPredictiveBackModeChange: (PredictiveBackMode) -> Unit,
     onPredictiveBackSwipeDistanceDpChange: (Int) -> Unit,
     onZoomExcludedChange: (List<String>) -> Unit,
+    onPanelHiddenChange: (List<String>) -> Unit,
     onRadialInteractionEnabledChange: (Boolean) -> Unit,
     onZoomInteractionEnabledChange: (Boolean) -> Unit,
     onRadialKeepOpenChange: (Boolean) -> Unit,
@@ -191,6 +194,10 @@ internal fun FreeNavHost(
         remember(backStack) { { pushRoute(AppRoute.ZoomLaunchScenes) } }
     val navigateToZoomExcluded: () -> Unit =
         remember(backStack) { { pushRoute(AppRoute.ZoomExcluded) } }
+    val navigateToPanelHidden: () -> Unit =
+        remember(backStack) { { pushRoute(AppRoute.PanelHidden) } }
+    val navigateToPanelHiddenPicker: () -> Unit =
+        remember(backStack) { { pushRoute(AppRoute.PanelHiddenPicker) } }
     val navigateToZoomExcludedPicker: () -> Unit =
         remember(backStack) { { pushRoute(AppRoute.ZoomExcludedPicker) } }
 
@@ -301,6 +308,7 @@ internal fun FreeNavHost(
                     onFloatKeepAliveChange = onFloatKeepAliveChange,
                     onFloatHandleMaxCountChange = onFloatHandleMaxCountChange,
                     onZoomMaxWindowCountChange = onZoomMaxWindowCountChange,
+                    onNavigateToPanelHidden = navigateToPanelHidden,
                 )
             AppRoute.RadialEffect ->
                 RadialEffectScreen(
@@ -348,6 +356,22 @@ internal fun FreeNavHost(
                     onZoomLaunchControlCenterChange = onZoomLaunchControlCenterChange,
                     onZoomLaunchInterAppChange = onZoomLaunchInterAppChange,
                     onZoomLaunchClipboardChange = onZoomLaunchClipboardChange,
+                )
+            AppRoute.PanelHidden ->
+                PanelHiddenScreen(
+                    state = state,
+                    apps = apps,
+                    onBack = popBackStack,
+                    onAddApps = navigateToPanelHiddenPicker,
+                    onPanelHiddenChange = onPanelHiddenChange,
+                )
+            AppRoute.PanelHiddenPicker ->
+                PanelHiddenPickerScreen(
+                    state = state,
+                    apps = apps,
+                    appsLoading = appsLoading,
+                    onBack = popBackStack,
+                    onPanelHiddenChange = onPanelHiddenChange,
                 )
             AppRoute.ZoomExcluded ->
                 ZoomExcludedScreen(
@@ -416,7 +440,9 @@ private fun routeOfName(name: String): AppRoute? =
         AppRoute.BlacklistPicker.javaClass.name -> AppRoute.BlacklistPicker
         AppRoute.ZoomOptions.javaClass.name -> AppRoute.ZoomOptions
         AppRoute.ZoomLaunchScenes.javaClass.name -> AppRoute.ZoomLaunchScenes
-        AppRoute.ZoomExcluded.javaClass.name -> AppRoute.ZoomExcluded
+        AppRoute.PanelHidden.javaClass.name -> AppRoute.PanelHidden
+    AppRoute.PanelHiddenPicker.javaClass.name -> AppRoute.PanelHiddenPicker
+    AppRoute.ZoomExcluded.javaClass.name -> AppRoute.ZoomExcluded
         AppRoute.ZoomExcludedPicker.javaClass.name -> AppRoute.ZoomExcludedPicker
         AppRoute.RadialSettings.javaClass.name -> AppRoute.RadialSettings
         AppRoute.RadialShimmer.javaClass.name -> AppRoute.RadialShimmer

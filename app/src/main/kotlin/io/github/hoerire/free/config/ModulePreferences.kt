@@ -192,6 +192,15 @@ internal object ModulePreferences {
     const val ACTION_PREDICTIVE_BACK_MORE_PANEL =
         "io.github.hoerire.free.action.PREDICTIVE_BACK_MORE_PANEL"
 
+    /**
+     * 隐藏应用：这些应用不出现在「更多」面板的列表里（收藏、最近、全部三处一起生效）。
+     *
+     * 只影响面板展示，不改动侧边栏自己的配置：面板数据由 [FavoriteGroupInjector] 在
+     * 写入 adapter 前过滤。与 [KEY_BLACKLIST_PACKAGES]（暂停模块增强）和
+     * [KEY_ZOOM_EXCLUDED_PACKAGES]（禁用浮窗）语义都不同，键必须分开。
+     */
+    const val KEY_PANEL_HIDDEN_PACKAGES = "panel_hidden_packages_v1"
+
     /** 打开面板时起手的位置：从哪一侧起手、按下的坐标（像素）。 */
     const val EXTRA_GESTURE_SIDE = "gesture_side_left"
     const val EXTRA_GESTURE_X = "gesture_x"

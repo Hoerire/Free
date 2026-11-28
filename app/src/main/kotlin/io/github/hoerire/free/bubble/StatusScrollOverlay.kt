@@ -493,38 +493,56 @@ internal class StatusScrollOverlay(context: Context) : LinearLayout(context) {
      * 结果滚动条在中段就断掉、右边空着一大块。
      */
     private fun tickerRightBoundary(parent: ViewGroup): Int {
-        val camera = cameraLeftInHost(parent)
+        val camera = cameraBoundsInHost(parent)
         val system = findRightSystemBoundary(parent)
+        val left = clockOffsetInHost(false)
         ModuleLog.debug("BubbleNotify") {
-            "STATUS_TICKER_BOUNDS_left" + clockOffsetInHost(false) +
-                "_camera" + (camera ?: -1) +
+            "STATUS_TICKER_BOUNDS_left" + left +
+                "_camera" + (camera?.get(0) ?: -1) +
+                "_cameraEnd" + (camera?.get(1) ?: -1) +
                 "_system" + system +
                 "_parent" + parent.measuredWidth
         }
-        // 有摄像头就顶到挖孔左沿（只留 2dp 余量）；没有摄像头才用系统图标区左沿，
-        // 那里自带一段留白，多让 24dp。
-        return if (camera != null) Math.max(0, camera - dp(2f))
-        else Math.max(0, system - dp(24f))
+        // 右界的裁决收在 StatusTickerBounds（纯数值 + 单测）：旧逻辑无条件停在挖孔左沿，
+        // 在居中/偏左挖孔的机型上把可视区砍掉一半；现在只在挖孔真的挡路、且停过去还剩得下
+        // 可用宽度时才让路，否则用图标区左沿。任何机型都不会比旧逻辑更窄。
+        return StatusTickerBounds.rightBoundary(
+            left = left,
+            cameraLeft = camera?.get(0),
+            cameraRight = camera?.get(1),
+            systemLeft = system,
+            edgeInset = dp(2f),
+            systemInset = dp(24f),
+        )
     }
 
-    /** 摄像头挖孔左沿（宿主坐标）；没有挖孔或取不到返回 null。 */
-    private fun cameraLeftInHost(parent: ViewGroup): Int? {
+    /**
+     * 挖孔在宿主坐标里的横向范围 [左沿, 右沿]；没有挖孔或取不到返回 null。
+     *
+     * 两个沿一起返回：右沿用来判断「挖孔是否真的挡在滚动条能到的范围里」。
+     * 只看左沿会误判——居中挖孔的左沿把可视区间砍掉一半，而它右侧其实还有大量空白。
+     */
+    private fun cameraBoundsInHost(parent: ViewGroup): IntArray? {
         val cutout =
             runCatching { rootWindowInsets?.displayCutout }.getOrNull() ?: return null
         val rects = cutout.boundingRects
         if (rects.isEmpty()) return null
         val hostLocation = IntArray(2)
         runCatching { parent.getLocationOnScreen(hostLocation) }.getOrNull() ?: return null
-        var result = Int.MAX_VALUE
+        var leftmost = Int.MAX_VALUE
+        var rightmost = Int.MIN_VALUE
         for (rect in rects) {
             if (rect == null || rect.isEmpty) continue
             // boundingRects 用的是窗口坐标；状态栏窗口贴着屏幕左上角，换算到宿主本地坐标即可。
-            val inHost = rect.left - hostLocation[0]
-            if (inHost in 1 until Math.max(1, parent.measuredWidth)) {
-                result = Math.min(result, inHost)
+            val inHostLeft = rect.left - hostLocation[0]
+            val inHostRight = rect.right - hostLocation[0]
+            if (inHostLeft in 1 until Math.max(1, parent.measuredWidth)) {
+                leftmost = Math.min(leftmost, inHostLeft)
+                rightmost = Math.max(rightmost, inHostRight)
             }
         }
-        return if (result == Int.MAX_VALUE) null else result
+        if (leftmost == Int.MAX_VALUE || rightmost == Int.MIN_VALUE) return null
+        return intArrayOf(leftmost, rightmost)
     }
 
     /**

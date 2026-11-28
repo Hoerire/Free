@@ -85,6 +85,13 @@ internal data class ModuleSettingsSnapshot(
         ModulePreferences.DEFAULT_PREDICTIVE_BACK_SWIPE_DISTANCE_DP,
     /** 侧滑扩展的手势模式：上滑切窗+下滑更多 / 下滑切窗 / 下滑更多。 */
     val predictiveBackMode: PredictiveBackMode = ModulePreferences.DEFAULT_PREDICTIVE_BACK_MODE,
+    /**
+     * 隐藏应用：不出现在「更多」面板的列表里（收藏、最近、全部三处一起生效）。
+     *
+     * 只影响面板展示，不碰侧边栏自己的配置；与 [blacklistPackages]（暂停模块增强）、
+     * [zoomExcludedPackages]（禁用浮窗）是三条互不相干的语义。
+     */
+    val panelHiddenPackages: List<String> = emptyList(),
     /** 贴边挂机：收成贴边浮标后保持应用继续运行。 */
     val floatKeepAlive: Boolean = ModulePreferences.DEFAULT_FLOAT_KEEP_ALIVE,
     /** 扇形呼出后未选择任何条目时保持显示，不自动收起。 */
@@ -197,6 +204,8 @@ internal data class ModuleSettingsSnapshot(
     val longPressMuteEffective: Boolean get() = zoomInteractionActive && longPressMuteEnabled
     /** 返回增强只跟模块总开关走：模块停用时等同关闭。 */
     val predictiveBackEffective: Boolean get() = enabled && predictiveBackEnabled
+
+
 
     /** 返回增强的触发距离（dp），已按上下限钳位。 */
     val predictiveBackSwipeDistanceDpEffective: Int
@@ -323,6 +332,10 @@ internal data class ModuleSettingsSnapshot(
                 ModulePreferences.coercePredictiveBackSwipeDistanceDp(predictiveBackSwipeDistanceDp),
             )
             .putInt(ModulePreferences.KEY_PREDICTIVE_BACK_MODE, predictiveBackMode.storedValue)
+            .putString(
+                ModulePreferences.KEY_PANEL_HIDDEN_PACKAGES,
+                ModulePreferences.encodePackages(panelHiddenPackages),
+            )
             // 按时长触发、三选一动作的旧键：升级后清掉，避免残留值干扰排查。
             .remove(ModulePreferences.LEGACY_KEY_PREDICTIVE_BACK_HOLD_MS)
             .remove(ModulePreferences.LEGACY_KEY_PREDICTIVE_BACK_ACTION)
@@ -717,6 +730,9 @@ internal data class ModuleSettingsSnapshot(
                             ModulePreferences.DEFAULT_PREDICTIVE_BACK_MODE.storedValue,
                         ),
                     ),
+                panelHiddenPackages = ModulePreferences.decodePackages(
+                    preferences.getString(ModulePreferences.KEY_PANEL_HIDDEN_PACKAGES, null),
+                ),
                 radialKeepOpen = preferences.getBoolean(
                     ModulePreferences.KEY_RADIAL_KEEP_OPEN,
                     ModulePreferences.DEFAULT_RADIAL_KEEP_OPEN,

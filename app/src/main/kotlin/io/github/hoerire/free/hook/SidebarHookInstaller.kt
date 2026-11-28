@@ -133,7 +133,13 @@ internal class SidebarHookInstaller(private val module: XposedModule, private va
                         if (endpoint == null) {
                             val targetUid = ColorOsSidebarTarget.supportedUid(service)
                             if (targetUid == Process.myUid()) {
-                                endpoint = ColorOsAllAppsEndpoint(service, loader, configuration, { visualTarget }, ::log)
+                                // 「更多」面板的列表改写（隐藏应用、最近去重）要读模块设置；
+                                // 注入本进程同一份快照，改设置后广播会重读，不必重开面板。
+                                io.github.hoerire.free.platform.coloros.FavoriteGroupInjector
+                                    .bindSettings { configuration.snapshot }
+                                endpoint = ColorOsAllAppsEndpoint(
+                                    service, loader, configuration, { visualTarget }, ::log,
+                                )
                             } else {
                                 log(
                                     Log.WARN,
