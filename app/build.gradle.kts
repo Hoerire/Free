@@ -43,6 +43,12 @@ android {
         compose = true
     }
 
+    // 只保留会显示的语言：其余 84 个 locale 全是 AndroidX / COUI 带进来的翻译，界面从不显示，
+    // 却让 resources.arsc 的 string 类型按 locale 各存一份条目偏移表（每条文案 × 86 份）。
+    androidResources {
+        localeFilters += listOf("zh", "en")
+    }
+
     packaging {
         dex {
             useLegacyPackaging = true
