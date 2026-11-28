@@ -108,8 +108,9 @@
     <string name="zoom_excluded_empty_summary">加入后，这些应用或服务不会以任何形式的自由浮窗打开</string>
     <string name="verbose_log_title">详细日志</string>
     <string name="verbose_log_summary">开启后记录详细的诊断日志，在 LSPosed 里导出给开发者，立即生效</string>
+    <string name="settings_tile_label">Free</string>
     <string name="hide_launcher_icon_title">隐藏图标</string>
-    <string name="hide_launcher_icon_summary">从桌面与应用列表中移除入口；仍可从系统设置的「操作教程」进入，随时在这里恢复</string>
+    <string name="hide_launcher_icon_summary">从桌面与应用列表中移除入口。LSPosed 里的模块入口也会一起消失（管理器按桌面入口解析），隐藏后请用快捷设置里的「Free 设置」磁贴进入</string>
     <string name="radial_backdrop_title">背景遮罩</string>
     <string name="radial_backdrop_summary">向左压暗，向右系统模糊，0 为不处理</string>
     <string name="outside_tap_close_title">关闭小窗</string>

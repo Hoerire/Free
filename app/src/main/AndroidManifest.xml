@@ -33,7 +33,34 @@
         <activity
             android:name=".MainActivity"
             android:enableOnBackInvokedCallback="true"
-            android:exported="true" />
+            android:exported="true">
+            <!--
+                只带 MAIN、**不带 LAUNCHER**：桌面不会出现图标，但管理器仍可解析到它。
+                关键是与 Xposed 模块约定一致：LSPosed 管理器找设置入口用的是
+                MAIN + `de.robv.android.xposed.category.MODULE_SETTINGS` 这个类别
+                （对照系统里其它模块的清单确认过）。少了这个类别，隐藏图标
+                （禁用 LauncherAlias）后管理器仍然找不到入口。
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="de.robv.android.xposed.category.MODULE_SETTINGS" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            快捷设置磁贴：隐藏桌面图标后 LSPosed 的模块入口也会消失（管理器按桌面入口解析），
+            磁贴是此时唯一稳定的设置入口；需要用户自己在快捷设置里添加一次。
+        -->
+        <service
+            android:name=".ui.SettingsTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_settings_tile"
+            android:label="@string/settings_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <!--
             桌面入口单独放在别名上：禁用别名即可隐藏桌面图标，
